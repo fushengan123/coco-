@@ -263,7 +263,7 @@ extension WebViewController: WKNavigationDelegate {
         let ns = error as NSError
         if ns.code == NSURLErrorCancelled { return }
         // 本地首页不会失败；子资源失败不弹错误页，避免误判（与安卓一致）
-        if let url = ns.userInfo[NSURLErrorFailingURLStringKey] as? String,
+        if let url = ns.userInfo[NSURLErrorFailingURLStringErrorKey] as? String,
            url.hasPrefix(Config.scheme + "://") {
             return
         }
