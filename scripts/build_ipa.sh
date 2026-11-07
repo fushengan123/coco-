@@ -20,10 +20,20 @@ fi
 rm -rf "$OUT_DIR"
 mkdir -p "$OUT_DIR"
 
+# xcodegen 只有显式声明 scheme 才会生成 shared scheme；
+# 没生成就退回 -target，否则 xcodebuild 直接报 "does not contain a scheme"
+if xcodebuild -project CocoVideo.xcodeproj -list 2>/dev/null | sed -n '/Schemes:/,$p' | grep -qw "$APP_NAME"; then
+  echo ">> 用 scheme: $APP_NAME"
+  TARGET_ARGS=(-scheme "$APP_NAME")
+else
+  echo ">> 没找到 scheme，退回 target: $APP_NAME"
+  TARGET_ARGS=(-target "$APP_NAME")
+fi
+
 echo ">> archive (未签名)"
 xcodebuild \
   -project CocoVideo.xcodeproj \
-  -scheme "$APP_NAME" \
+  "${TARGET_ARGS[@]}" \
   -configuration Release \
   -sdk iphoneos \
   -destination 'generic/platform=iOS' \
@@ -49,3 +59,8 @@ cd ..
 echo ""
 echo "OK -> $(pwd)/$OUT_DIR/$IPA_NAME"
 ls -lh "$OUT_DIR/$IPA_NAME"
+
+# 发布：把 IPA 挂到 GitHub Release，公开仓库里匿名可下载
+if [ -f "scripts/publish_ipa.sh" ]; then
+  bash scripts/publish_ipa.sh "$OUT_DIR/$IPA_NAME" || echo "PUBLISH: skipped"
+fi
