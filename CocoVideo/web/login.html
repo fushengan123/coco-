@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>会员登录 - COCO影视</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div class="back-head">
+  <span class="back" onclick="history.back()">‹</span>
+  <h1>会员登录</h1>
+</div>
+<div class="auth-page">
+  <div class="auth-card">
+    <h2>欢迎回来</h2>
+    <div class="auth-sub">登录网站会员，同步收藏与播放记录</div>
+    <div class="auth-field"><span>👤</span><input id="name" type="text" placeholder="用户名 / 邮箱" autocomplete="username"></div>
+    <div class="auth-field"><span>🔒</span><input id="pwd" type="password" placeholder="密码" autocomplete="current-password"></div>
+    <div class="auth-msg" id="msg"></div>
+    <div class="auth-btn" id="btnLogin">登 录</div>
+    <div class="auth-link">
+      <a href="reg.html">注册账号</a>
+      <a href="javascript:;" id="linkFind">忘记密码？</a>
+    </div>
+  </div>
+</div>
+<script src="js/app.js"></script>
+<script>
+var btn = document.getElementById('btnLogin');
+function doLogin() {
+  var name = document.getElementById('name').value.trim();
+  var pwd = document.getElementById('pwd').value;
+  var msg = document.getElementById('msg');
+  if (!name || !pwd) { msg.textContent = '请输入用户名和密码'; return; }
+  msg.textContent = '登录中...';
+  btn.style.opacity = '.6';
+  Coco.login(name, pwd, function (err, d) {
+    btn.style.opacity = '1';
+    if (err) { msg.textContent = '网络错误，请重试'; return; }
+    if (d && d.code == 1) {
+      msg.textContent = '登录成功';
+      setTimeout(function () { location.href = 'mine.html'; }, 600);
+    } else {
+      msg.textContent = (d && d.msg) ? d.msg : '登录失败，请检查账号密码';
+    }
+  });
+}
+btn.onclick = doLogin;
+document.getElementById('pwd').addEventListener('keydown', function (e) { if (e.key === 'Enter') doLogin(); });
+document.getElementById('linkFind').onclick = function () { location.href = 'findpass.html'; };
+</script>
+</body>
+</html>

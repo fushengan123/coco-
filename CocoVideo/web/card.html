@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>激活码兑换</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div class="page-top">
+  <span class="pt-back" onclick="history.back()">‹</span>
+  <span class="pt-title">激活码兑换</span>
+</div>
+
+<div class="form-card">
+  <div class="form-row"><label>卡号</label><input id="card_no" placeholder="请输入卡号"></div>
+  <div class="form-row"><label>卡密</label><input id="card_pwd" placeholder="请输入卡密"></div>
+</div>
+<button class="btn-primary" id="btnGo">立即兑换</button>
+<div class="form-tip" id="tip">兑换后积分将自动充值到账户，可在"积分兑换会员"中兑换会员。如未登录请先登录。</div>
+
+<div class="tabbar">
+  <a href="index.html"><span class="t-ico">🏠</span>首页</a>
+  <a href="category.html"><span class="t-ico">🔲</span>分类</a>
+  <a href="rank.html"><span class="t-ico">🔥</span>榜单</a>
+  <a href="fav.html"><span class="t-ico">⭐</span>收藏</a>
+  <a href="mine.html"><span class="t-ico">👤</span>我的</a>
+</div>
+
+<script src="js/app.js"></script>
+<script>
+document.getElementById('btnGo').onclick = function () {
+  var btn = this;
+  var no = document.getElementById('card_no').value.trim();
+  var pwd = document.getElementById('card_pwd').value.trim();
+  var tip = document.getElementById('tip');
+  if (!no || !pwd) { tip.textContent = '请输入卡号和卡密'; return; }
+  if (!Coco.isLogin()) { tip.textContent = '请先登录'; setTimeout(function () { location.href = 'login.html'; }, 600); return; }
+  btn.disabled = true; btn.textContent = '兑换中...';
+  Coco.post('/index.php/user/buy', { flag: 'card', card_no: no, card_pwd: pwd }, function (err, d) {
+    btn.disabled = false; btn.textContent = '立即兑换';
+    if (!err && d && d.code == 1) {
+      tip.textContent = '✅ 兑换成功，积分已到账';
+      Coco.toast('兑换成功');
+      setTimeout(function () { location.href = 'exchange.html'; }, 1500);
+    } else {
+      var msg = (d && d.msg) ? d.msg : '兑换失败，请核对卡号卡密';
+      tip.textContent = msg;
+      Coco.toast(msg);
+    }
+  });
+};
+</script>
+</body>
+</html>

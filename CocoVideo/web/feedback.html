@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>反馈求片</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div class="page-top">
+  <span class="pt-back" onclick="history.back()">‹</span>
+  <span class="pt-title">反馈求片</span>
+</div>
+
+<div class="form-card">
+  <div class="form-row"><label>昵称</label><input id="fb_name" placeholder="登录后自动使用账号昵称" maxlength="20"></div>
+  <div class="form-row" style="flex-direction:column;align-items:stretch;">
+    <label style="margin-bottom:6px;">留言内容</label>
+    <textarea id="fb_content" placeholder="想看的片、遇到的问题、意见建议都可以写在这里" style="width:100%;background:var(--card);border:1px solid var(--line);border-radius:10px;color:var(--txt1);padding:10px 12px;font-size:14px;min-height:110px;resize:none;outline:none;box-sizing:border-box;"></textarea>
+  </div>
+</div>
+<button class="btn-primary" id="btnGo">提交留言</button>
+<div class="form-tip" id="tip">留言会同步到网站的留言板，站长在后台可以查看并回复。未登录的留言会显示为"游客"。</div>
+
+<div class="tabbar">
+  <a href="index.html"><span class="t-ico">🏠</span>首页</a>
+  <a href="category.html"><span class="t-ico">🔲</span>分类</a>
+  <a href="rank.html"><span class="t-ico">🔥</span>榜单</a>
+  <a href="fav.html"><span class="t-ico">⭐</span>收藏</a>
+  <a href="mine.html"><span class="t-ico">👤</span>我的</a>
+</div>
+
+<script src="js/app.js"></script>
+<script>
+(function () {
+  // 已登录自动填昵称（只读）
+  var u = Coco.getUser();
+  if (u && u.name) {
+    var ni = document.getElementById('fb_name');
+    ni.value = u.name;
+    ni.readOnly = true;
+    ni.style.color = 'var(--txt3)';
+  }
+})();
+document.getElementById('btnGo').onclick = function () {
+  var btn = this;
+  var name = document.getElementById('fb_name').value.trim();
+  var content = document.getElementById('fb_content').value.trim();
+  var tip = document.getElementById('tip');
+  if (!name) { tip.textContent = '请填写昵称'; return; }
+  if (!content) { tip.textContent = '请填写留言内容'; return; }
+  if (content.length < 2) { tip.textContent = '留言内容太短了'; return; }
+  btn.disabled = true; btn.textContent = '提交中...';
+  Coco.post('/index.php/gbook/index.html', { gbook_content: content }, function (err, d) {
+    btn.disabled = false; btn.textContent = '提交留言';
+    if (err) { tip.textContent = '网络异常，请重试'; return; }
+    if (d && d.code == 1) {
+      tip.textContent = '✅ ' + (d.msg || '提交成功，感谢你的反馈');
+      Coco.toast('提交成功');
+      document.getElementById('fb_content').value = '';
+    } else if (d && d.code == 1003) {
+      tip.textContent = '需要登录后才能留言，正在跳转登录...';
+      setTimeout(function () { location.href = 'login.html'; }, 800);
+    } else if (d && d.code == 1005) {
+      tip.textContent = d.msg || '操作太频繁，请稍后再试';
+    } else {
+      tip.textContent = (d && d.msg) ? d.msg : '提交失败，请稍后再试';
+    }
+  });
+};
+</script>
+</body>
+</html>

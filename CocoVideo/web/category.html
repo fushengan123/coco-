@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>分类 - COCO影视</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div class="back-head">
+  <span class="back" onclick="history.back()">‹</span>
+  <h1 id="pageTitle">全部分类</h1>
+</div>
+<div class="cat-tabs" id="catTabs" style="position:sticky;top:48px;background:var(--bg);z-index:40;"></div>
+<div class="sub-row" id="subRow" style="display:none;">
+  <div class="sub-chips" id="subChips"></div>
+</div>
+<div class="sub-row" id="subRow3" style="display:none;top:88px;background:var(--bg);">
+  <div class="sub-chips" id="subChips3"></div>
+</div>
+<div class="section" style="margin-top:6px;">
+  <div class="vod-grid" id="grid"></div>
+  <div class="load-more" id="moreBtn">加载中...</div>
+</div>
+<div class="tabbar">
+  <a href="index.html"><span class="t-ico">🏠</span>首页</a>
+  <a class="on" href="category.html"><span class="t-ico">🔲</span>分类</a>
+  <a href="rank.html"><span class="t-ico">🔥</span>榜单</a>
+  <a href="fav.html"><span class="t-ico">⭐</span>收藏</a>
+  <a href="mine.html"><span class="t-ico">👤</span>我的</a>
+</div>
+<script src="js/app.js"></script>
+<script>
+var curT = Coco.qs('t'), pg = 1, loading = false, finished = false;
+var curC = Coco.qs('c') || '', curC3 = '';
+var autoSub = false; // 是否为"进入顶级自动选的二级"（空时自动跳下一个有内容的二级）
+var CLS = [];
+
+// 记忆上次选择的分类：URL 参数优先，无参数时恢复上次选择（播放页返回/重新进入都能停留原类目）
+function loadCatMem() {
+  try {
+    var m = JSON.parse(localStorage.getItem('coco_cat_mem') || 'null');
+    if (!curT && m && m.t) curT = String(m.t);
+    if (!curC && m && m.c) curC = String(m.c);
+    if (!curC3 && m && m.c3) curC3 = String(m.c3);
+  } catch (e) {}
+}
+function saveCatMem() {
+  try {
+    localStorage.setItem('coco_cat_mem', JSON.stringify({ t: curT || '', c: curC || '', c3: curC3 || '', ts: Date.now() }));
+  } catch (e) {}
+}
+loadCatMem();
+
+function topName() {
+  if (!curT) return '全部';
+  var t = CLS.filter(function (c) { return c.type_id == curT; })[0];
+  return t ? t.type_name : '全部';
+}
+
+Coco.loadClasses(function (cls) {
+  CLS = cls || [];
+  var tops = CLS; // loadClasses 已返回顶级列表（每项含 subs 二级）
+  var tabs = document.getElementById('catTabs');
+  tabs.innerHTML = ''; // 防重复渲染
+  if (!tops.length) {
+    // 一级目录加载失败：给重试入口
+    var fail = document.createElement('a');
+    fail.href = 'javascript:;'; fail.textContent = '分类加载失败，点击重试';
+    fail.style.color = 'var(--gold)';
+    fail.onclick = function () { location.reload(); };
+    tabs.appendChild(fail);
+    return;
+  }
+  var all = document.createElement('a');
+  all.href = 'javascript:;'; all.textContent = '全部';
+  if (!curT) all.className = 'on';
+  all.onclick = function () { switchTop(''); };
+  tabs.appendChild(all);
+  tops.forEach(function (c) {
+    var a = document.createElement('a');
+    a.href = 'javascript:;';
+    a.textContent = c.type_name;
+    a.dataset.id = c.type_id;
+    if (curT == c.type_id) { a.className = 'on'; document.getElementById('pageTitle').textContent = c.type_name; }
+    a.onclick = function () { switchTop(c.type_id, c.type_name); };
+    tabs.appendChild(a);
+  });
+  renderSubs();
+  load();
+});
+
+// 当前顶级是否含二级
+function subsOf(id) {
+  var t = CLS.filter(function (c) { return String(c.type_id) == String(id); })[0];
+  return (t && t.subs) ? t.subs : [];
+}
+function renderSubs() {
+  var row = document.getElementById('subRow');
+  var box = document.getElementById('subChips');
+  var subs = subsOf(curT);
+  if (!curT || !subs.length) { row.style.display = 'none'; box.innerHTML = ''; return; }
+  row.style.display = 'flex';
+  // 去掉“全部”后：进入一级分类默认选中第一个具体二级，避免一级ID查不到子级视频而空白
+  if (!curC) { curC = String(subs[0].type_id); autoSub = true; }
+  saveCatMem();
+  fillChips(subs);
+}
+function fillChips(subs) {
+  var box = document.getElementById('subChips');
+  var html = '';
+  subs.forEach(function (s) {
+    html += '<span class="chip' + (String(s.type_id) === String(curC) ? ' on' : '') + '" data-c="' + s.type_id + '">' + s.type_name + '</span>';
+  });
+  box.innerHTML = html;
+  bindChips();
+}
+function bindChips() {
+  var box = document.getElementById('subChips');
+  box.querySelectorAll('.chip').forEach(function (ch) {
+    ch.onclick = function () {
+      box.querySelectorAll('.chip').forEach(function (x) { x.classList.remove('on'); });
+      ch.classList.add('on');
+      curC = ch.dataset.c || '';
+      curC3 = '';
+      autoSub = false; // 手动选择，不再自动跳转
+      saveCatMem();
+      renderSubs3();
+      reload();
+    };
+  });
+}
+// 三级目录：只显示"真正属于当前二级的子分类"（排除同顶级兄弟，服务器无真三级则不显示该行）
+function renderSubs3() {
+  var row3 = document.getElementById('subRow3');
+  var box3 = document.getElementById('subChips3');
+  if (!curC || !curT) { row3.style.display = 'none'; box3.innerHTML = ''; return; }
+  Coco.loadSubs(curC, function (list) {
+    if (!list || !list.length) { row3.style.display = 'none'; box3.innerHTML = ''; return; }
+    // 过滤：当前二级的子导航里，排除属于"顶级下二级集合"的兄弟，剩下的才是真三级
+    var top = CLS.filter(function (c) { return String(c.type_id) == String(curT); })[0];
+    var topIds = (top && top.subs ? top.subs : []).map(function (s) { return String(s.type_id); });
+    var real = list.filter(function (s) { return topIds.indexOf(String(s.type_id)) < 0; });
+    if (!real.length) { row3.style.display = 'none'; box3.innerHTML = ''; return; }
+    row3.style.display = 'flex';
+    var html = '<span class="chip on" data-c3="">全部</span>';
+    real.forEach(function (s) {
+      html += '<span class="chip" data-c3="' + s.type_id + '">' + s.type_name + '</span>';
+    });
+    box3.innerHTML = html;
+    box3.querySelectorAll('.chip').forEach(function (ch) {
+      ch.onclick = function () {
+        box3.querySelectorAll('.chip').forEach(function (x) { x.classList.remove('on'); });
+        ch.classList.add('on');
+        curC3 = ch.dataset.c3 || '';
+        saveCatMem();
+        reload();
+      };
+    });
+  });
+}
+function switchTop(id, name) {
+  curT = id || '';
+  curC = '';
+  curC3 = '';
+  autoSub = false;
+  pg = 1; finished = false;
+  document.getElementById('pageTitle').textContent = id ? name : '全部分类';
+  document.querySelectorAll('#catTabs a').forEach(function (x) { x.classList.toggle('on', (!id && !x.dataset.id) || (id && x.dataset.id == id)); });
+  saveCatMem();
+  renderSubs();
+  renderSubs3();
+  reload();
+}
+function reload() {
+  pg = 1; finished = false; loading = false;
+  document.getElementById('grid').innerHTML = '';
+  load();
+}
+function load() {
+  if (loading || finished) return;
+  loading = true;
+  document.getElementById('moreBtn').textContent = '加载中...';
+  var p = { pg: pg };
+  // 统一用 t 传所选分类（三级>二级>一级），苹果CMS按类型ID过滤
+  var tid = curC3 || curC || curT;
+  if (tid) p.t = tid;
+  Coco.list(p, function (err, d) {
+    loading = false;
+    var el = document.getElementById('grid');
+    if (err) { document.getElementById('moreBtn').textContent = '加载失败，点击重试'; return; }
+    // 自动选中的二级为空（如港台剧暂无数据）→ 自动跳下一个二级，避免“已经到底啦”
+    if (autoSub && curC && curT && (!d.list || !d.list.length)) {
+      var subs = subsOf(curT);
+      var idx = -1;
+      for (var i = 0; i < subs.length; i++) { if (String(subs[i].type_id) === String(curC)) { idx = i; break; } }
+      if (idx >= 0 && idx < subs.length - 1) {
+        curC = String(subs[idx + 1].type_id);
+        renderSubs();
+        renderSubs3();
+        reload();
+        return;
+      }
+    }
+    el.innerHTML += (d.list || []).map(Coco.poster).join('');
+    Coco.imgLazy(el);
+    finished = pg >= (d.pagecount || 1);
+    document.getElementById('moreBtn').textContent = finished ? '已经到底啦' : '上滑加载更多';
+  });
+}
+document.getElementById('moreBtn').onclick = function () { if (!finished) { pg++; load(); } };
+Coco.scrollLoad(function () { if (!loading && !finished) { pg++; load(); } });
+</script>
+</body>
+</html>

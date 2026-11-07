@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>积分兑换会员</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div class="page-top">
+  <span class="pt-back" onclick="history.back()">‹</span>
+  <span class="pt-title">积分兑换会员</span>
+</div>
+
+<div class="points-bar">
+  <span class="pb-t">我的积分</span>
+  <span class="pb-v" id="exPoints">-</span>
+</div>
+<div class="points-bar" style="margin-top:0;">
+  <span class="pb-t">当前等级</span>
+  <span class="pb-v" id="exGroup" style="font-size:14px;color:#e5e7eb;">-</span>
+</div>
+
+<div class="group-grid" id="groupGrid"><div class="empty-tip" style="grid-column:1/3;">加载中...</div></div>
+
+<button class="btn-exchange" id="btnEx" disabled>请选择要兑换的等级与时长</button>
+
+<div class="tabbar">
+  <a href="index.html"><span class="t-ico">🏠</span>首页</a>
+  <a href="category.html"><span class="t-ico">🔲</span>分类</a>
+  <a href="rank.html"><span class="t-ico">🔥</span>榜单</a>
+  <a href="fav.html"><span class="t-ico">⭐</span>收藏</a>
+  <a class="on" href="mine.html"><span class="t-ico">👤</span>我的</a>
+</div>
+
+<script src="js/app.js"></script>
+<script>
+(function () {
+  if (!Coco.isLogin()) { location.href = 'login.html'; return; }
+  var pick = null; // {id, name, long, points}
+  var LONG = { day: '包天', week: '包周', month: '包月', year: '包年' };
+
+  Coco.memberInfo(function (err, info) {
+    if (!err && info) {
+      document.getElementById('exPoints').textContent = info.points || '0';
+      document.getElementById('exGroup').textContent = info.group || '普通会员';
+    }
+  });
+
+  Coco.upgradeData(function (err, d) {
+    var grid = document.getElementById('groupGrid');
+    if (err || !d || !d.groups.length) { grid.innerHTML = '<div class="empty-tip" style="grid-column:1/3;">暂无可用会员等级，请先在后台配置会员组</div>'; return; }
+    var html = '';
+    d.groups.forEach(function (g) {
+      html += '<div class="group-card">' +
+        '<div class="gc-name">' + g.name + '</div>' +
+        '<div class="gc-price">兑换积分：<b>' + (g.points.month || '--') + '</b> 积分/月</div>' +
+        '<div class="price-row">' +
+        ['day','week','month','year'].map(function (lng) {
+          return '<span class="price-btn" data-id="' + g.id + '" data-name="' + g.name + '" data-long="' + lng + '" data-points="' + (g.points[lng] || '--') + '">' + LONG[lng] + '<br><small>' + (g.points[lng] || '--') + '</small></span>';
+        }).join('') +
+        '</div></div>';
+    });
+    grid.innerHTML = html;
+    var btns = grid.querySelectorAll('.price-btn');
+    btns.forEach(function (b) {
+      b.onclick = function () {
+        btns.forEach(function (x) { x.classList.remove('on'); });
+        b.classList.add('on');
+        pick = { id: b.getAttribute('data-id'), name: b.getAttribute('data-name'), long: b.getAttribute('data-long'), points: b.getAttribute('data-points') };
+        document.getElementById('btnEx').disabled = false;
+        document.getElementById('btnEx').textContent = '兑换「' + pick.name + '」' + LONG[pick.long] + '（' + pick.points + '积分）';
+      };
+    });
+  });
+
+  document.getElementById('btnEx').onclick = function () {
+    if (!pick) return;
+    var btn = this;
+    btn.disabled = true;
+    btn.textContent = '兑换中...';
+    Coco.exchange(pick.id, pick.long, function (err, d) {
+      if (!err && d && (d.code == 1 || d.msg)) {
+        Coco.toast((d.msg || '兑换成功'));
+        setTimeout(function () { location.href = 'member.html'; }, 1200);
+      } else {
+        btn.disabled = false;
+        btn.textContent = '兑换失败，点击重试';
+        Coco.toast('兑换失败，积分可能不足');
+      }
+    });
+  };
+})();
+</script>
+</body>
+</html>

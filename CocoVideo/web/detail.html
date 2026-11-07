@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>播放 - COCO影视</title>
+<link rel="stylesheet" href="css/app.css">
+<script src="js/hls.min.js"></script>
+</head>
+<body>
+<!-- 播放器 -->
+<div class="player-box" id="playerBox">
+  <video id="video" controls playsinline webkit-playsinline x5-playsinline controlslist="nodownload"></video>
+  <!-- 投屏状态遮罩：投屏后暂停本地播放，点击可恢复手机播放 -->
+  <div id="castMask" style="display:none;position:absolute;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,.82);color:#f5c518;flex-direction:column;align-items:center;justify-content:center;text-align:center;z-index:9;">
+    <div style="font-size:30px;">📺</div>
+    <div id="castMaskText" style="font-size:15px;margin-top:10px;font-weight:bold;">正在投屏到电视</div>
+    <div style="font-size:12px;color:#bbb;margin-top:8px;">手机已暂停本地播放，点击此处恢复手机播放</div>
+  </div>
+  <!-- 会员专享遮罩：无权限时覆盖播放器 -->
+  <div id="vipMask" style="display:none;position:absolute;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,.9);color:#f5c518;flex-direction:column;align-items:center;justify-content:center;text-align:center;z-index:10;">
+    <div style="font-size:40px;">👑</div>
+    <div style="font-size:17px;margin-top:12px;font-weight:bold;color:#fff;">该视频为会员专享</div>
+    <div style="font-size:12px;color:#bbb;margin-top:8px;">开通会员后即可观看</div>
+    <div id="vipGoBtn" style="margin-top:20px;background:#f5c518;color:#111;padding:11px 40px;border-radius:22px;font-size:15px;font-weight:bold;">立即开通会员</div>
+  </div>
+</div>
+
+<!-- 跳片头片尾 设置条（自动连播固定开启；跳过时间默认关闭，点击自定义） -->
+<div class="play-set" id="playSet" style="display:flex;align-items:center;gap:8px;padding:8px 12px;flex-wrap:wrap;">
+  <span class="ps-item" id="psHead" style="font-size:12px;color:#cfcfcf;background:#1c1c24;border:1px solid #333;border-radius:14px;padding:4px 12px;"></span>
+  <span class="ps-item" id="psTail" style="font-size:12px;color:#cfcfcf;background:#1c1c24;border:1px solid #333;border-radius:14px;padding:4px 12px;"></span>
+</div>
+
+<!-- 视频名称 -->
+<div class="vod-title-bar" id="vodTitleBar" style="display:none;">
+  <div class="vod-title" id="vodTitle"></div>
+  <div class="vod-title-sub" id="vodTitleSub"></div>
+</div>
+
+<!-- 详情/评论 tab -->
+<div class="detail-tabs">
+  <a class="on" data-tab="detail">详情</a>
+  <a data-tab="comment" id="tabCmt">评论(0)</a>
+</div>
+
+<div id="tabDetail">
+  <div class="detail-meta" id="meta"></div>
+  <div class="detail-intro" id="introBox" style="display:none;"></div>
+  <div class="detail-actions">
+    <div class="da-item" id="btnDownload"><span class="da-ico">⬇️</span>下载本地</div>
+    <div class="da-item" id="btnFav"><span class="da-ico">☆</span>收藏影片</div>
+    <div class="da-item" onclick="Coco.toast('求片请联系站长')"><span class="da-ico">💬</span>反馈求片</div>
+    <div class="da-item" id="btnShare"><span class="da-ico">↗️</span>影片分享</div>
+    <div class="da-item" id="btnCast"><span class="da-ico">📺</span>电视投屏</div>
+  </div>
+
+  <!-- 线路 -->
+  <div class="line-box">
+    <div class="box-title">播放资源<span class="more" id="lineCount"></span></div>
+    <div class="line-cards" id="lineCards"></div>
+  </div>
+
+  <!-- 选集（三列） -->
+  <div class="ep-box">
+    <div class="box-title">选集<span class="more" id="epCount"></span></div>
+    <div class="ep-grid" id="epGrid"></div>
+    <div class="ep-more" id="epMore" style="display:none;">展开全部</div>
+  </div>
+</div>
+
+<!-- 评论 tab -->
+<div id="tabComment" style="display:none;">
+  <div class="cmt-input">
+    <textarea id="cmtText" placeholder="说点什么吧..." maxlength="200"></textarea>
+    <div class="cmt-foot">
+      <span class="cmt-hint" id="cmtHint">登录后可发表评论</span>
+      <button class="cmt-send" id="cmtSend">发布</button>
+    </div>
+  </div>
+  <div id="cmtList"><div class="cmt-empty">评论加载中...</div></div>
+  <div class="cmt-page" id="cmtMore" style="display:none;">加载更多评论</div>
+</div>
+
+<!-- 好片推荐 -->
+<div class="section">
+  <div class="section-head"><h2>好片推荐</h2><a class="more" href="category.html">更多 ›</a></div>
+  <div class="hscroll mini" id="recList"></div>
+</div>
+
+<div class="tabbar">
+  <a href="index.html"><span class="t-ico">🏠</span>首页</a>
+  <a href="category.html"><span class="t-ico">🔲</span>分类</a>
+  <a href="rank.html"><span class="t-ico">🔥</span>榜单</a>
+  <a href="fav.html"><span class="t-ico">⭐</span>收藏</a>
+  <a href="mine.html"><span class="t-ico">👤</span>我的</a>
+</div>
+
+<script src="js/app.js"></script>
+<script>
+var vid = Coco.qs('id'), VOD = null, lines = [], curLine = 0, curEp = 0, curUrl = '';
+
+/* ===== 自动连播 / 跳过片头片尾（默认关闭，点击自定义秒数） ===== */
+var PS_KEY = 'coco_play_set';
+var PS = { auto: 1, head: 0, tail: 0 }; // 自动连播固定开启；head/tail 单位秒，0=关闭（默认关闭）
+try {
+  var _saved = JSON.parse(localStorage.getItem(PS_KEY) || '{}');
+  if (typeof _saved.head !== 'undefined') PS.head = _saved.head;
+  if (typeof _saved.tail !== 'undefined') PS.tail = _saved.tail;
+} catch (e) {}
+function savePS() { try { localStorage.setItem(PS_KEY, JSON.stringify({ head: PS.head, tail: PS.tail })); } catch (e) {} }
+function renderPS() {
+  document.getElementById('psHead').textContent = '跳过片头：' + (PS.head > 0 ? PS.head + '秒' : '关');
+  document.getElementById('psTail').textContent = '跳过片尾：' + (PS.tail > 0 ? PS.tail + '秒' : '关');
+}
+function clampSec(v) {
+  v = parseInt(v, 10);
+  if (isNaN(v) || v < 0) v = 0;
+  if (v > 3600) v = 3600;
+  return v;
+}
+function hideSetInput() { var m = document.getElementById('setMask'); if (m) m.style.display = 'none'; }
+function showSetInput(kind) {
+  var isHead = kind === 'head';
+  var cur = isHead ? PS.head : PS.tail;
+  var mask = document.getElementById('setMask');
+  if (!mask) {
+    mask = document.createElement('div');
+    mask.id = 'setMask';
+    mask.style.cssText = 'position:fixed;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,.6);z-index:99;display:none;align-items:center;justify-content:center;';
+    mask.innerHTML =
+      '<div style="width:76%;max-width:320px;background:#17171e;border:1px solid #333;border-radius:14px;padding:18px 16px;text-align:center;">' +
+      '<div id="setMaskTitle" style="color:#f5c518;font-size:16px;font-weight:bold;margin-bottom:12px;"></div>' +
+      '<input id="setMaskInput" type="number" min="0" max="3600" style="width:100%;box-sizing:border-box;padding:10px;background:#1c1c24;border:1px solid #444;border-radius:8px;color:#fff;font-size:16px;text-align:center;outline:none;">' +
+      '<div style="color:#888;font-size:12px;margin:8px 0 14px;">输入跳过秒数，0 或留空 = 关闭</div>' +
+      '<div style="display:flex;gap:10px;">' +
+      '<button id="setMaskCancel" style="flex:1;padding:10px;background:#26262f;border:1px solid #444;border-radius:8px;color:#ccc;font-size:15px;">取消</button>' +
+      '<button id="setMaskOk" style="flex:1;padding:10px;background:#f5c518;border:none;border-radius:8px;color:#000;font-size:15px;font-weight:bold;">确定</button>' +
+      '</div></div>';
+    document.body.appendChild(mask);
+    mask.addEventListener('click', function (e) { if (e.target === mask) hideSetInput(); });
+    document.getElementById('setMaskCancel').onclick = hideSetInput;
+    document.getElementById('setMaskOk').onclick = function () {
+      var v = clampSec(document.getElementById('setMaskInput').value);
+      if (isHead) PS.head = v; else PS.tail = v;
+      savePS(); renderPS();
+      Coco.toast(isHead ? (v > 0 ? '片头跳过 ' + v + ' 秒' : '已关闭跳过片头') : (v > 0 ? '片尾前 ' + v + ' 秒自动下一集' : '已关闭跳过片尾'));
+      hideSetInput();
+    };
+    document.getElementById('setMaskInput').addEventListener('keydown', function (e) { if (e.key === 'Enter') document.getElementById('setMaskOk').click(); });
+  }
+  document.getElementById('setMaskTitle').textContent = isHead ? '跳过片头（秒）' : '跳过片尾（秒）';
+  document.getElementById('setMaskInput').value = cur > 0 ? cur : '';
+  mask.style.display = 'flex';
+  setTimeout(function () { document.getElementById('setMaskInput').focus(); }, 60);
+}
+document.getElementById('psHead').onclick = function () { showSetInput('head'); };
+document.getElementById('psTail').onclick = function () { showSetInput('tail'); };
+renderPS();
+
+// 每集播放状态标记（换集时重置）
+var _skippedHead = false, _tailFired = false;
+function _resetEpFlags() { _skippedHead = false; _tailFired = false; }
+
+(function bindPlayEvents() {
+  var video = document.getElementById('video');
+  // 元数据加载完成：重置本集标记
+  video.addEventListener('loadedmetadata', _resetEpFlags);
+  video.addEventListener('loadeddata', _resetEpFlags);
+  // 进度监听：跳片头 + 片尾自动连播
+  video.addEventListener('timeupdate', function () {
+    var dur = video.duration, t = video.currentTime;
+    if (!isFinite(dur) || dur <= 0) return;
+    // 跳过片头：只在每集刚开始、用户未手动拖动过时触发一次
+    if (!_skippedHead && PS.head > 0 && dur > PS.head + PS.tail + 60 && t < PS.head && t >= 0) {
+      _skippedHead = true;
+      try { video.currentTime = PS.head; } catch (e) {}
+      Coco.toast('已跳过片头 ' + PS.head + ' 秒');
+    }
+    // 跳过片尾：到达距结束 tail 秒处，自动下一集（只触发一次）
+    if (!_tailFired && PS.auto && PS.tail > 0 && dur > PS.head + PS.tail + 60 && t >= dur - PS.tail) {
+      _tailFired = true;
+      playNext('已到片尾，自动播放下一集');
+    }
+  });
+  // 播放结束兜底：未开启片尾跳过或短视频时，靠 ended 自动连播
+  video.addEventListener('ended', function () {
+    if (PS.auto) playNext('本集播放完成，自动播放下一集');
+  });
+})();
+
+// 切换到指定集（统一入口：更新选中态+播放+滚动）
+function switchEp(index) {
+  var line = lines[curLine]; if (!line || !line.eps[index]) return;
+  curEp = index;
+  document.querySelectorAll('#epGrid .ep-item').forEach(function (x) { x.classList.remove('on'); });
+  var el = document.querySelector('#epGrid .ep-item[data-e="' + index + '"]');
+  if (el) {
+    el.classList.add('on');
+    // 折叠状态下目标集不在可见2行内 → 自动展开
+    if (!epsOpen) {
+      var eg2 = document.getElementById('epGrid');
+      var mh = parseFloat(eg2.style.maxHeight);
+      var egTop = eg2.getBoundingClientRect().top;
+      var elTop = el.getBoundingClientRect().top - egTop;
+      if (mh && elTop + el.offsetHeight > mh) {
+        var more2 = document.getElementById('epMore');
+        if (more2 && more2.style.display !== 'none') more2.click();
+      }
+    }
+  }
+  play(line.eps[index].url);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// 自动播放下一集（当前线路顺序；最后一集则提示完结）
+function playNext(tip) {
+  var line = lines[curLine];
+  if (!line) return;
+  if (curEp + 1 < line.eps.length) {
+    if (tip) Coco.toast(tip + '：' + line.eps[curEp + 1].name);
+    switchEp(curEp + 1);
+  } else {
+    Coco.toast('当前线路已全部播完');
+  }
+}
+
+document.querySelectorAll('.detail-tabs a').forEach(function (a) {
+  a.onclick = function () {
+    document.querySelectorAll('.detail-tabs a').forEach(function (x) { x.classList.remove('on'); });
+    a.classList.add('on');
+    var isD = a.dataset.tab === 'detail';
+    document.getElementById('tabDetail').style.display = isD ? 'block' : 'none';
+    document.getElementById('tabComment').style.display = isD ? 'none' : 'block';
+  };
+});
+
+function play(url) {
+  curUrl = url;
+  var video = document.getElementById('video');
+  var isCasting = document.getElementById('castMask').style.display !== 'none';
+  var lower = (url || '').toLowerCase();
+  if (lower.indexOf('.m3u8') > -1 && window.Hls && Hls.isSupported()) {
+    if (window._hls) { window._hls.destroy(); }
+    var hls = new Hls({ enableWorker: true });
+    window._hls = hls;
+    hls.loadSource(url); hls.attachMedia(video);
+    hls.on(Hls.Events.MANIFEST_PARSED, function () { if (!isCasting) video.play().catch(function(){}); });
+    hls.on(Hls.Events.ERROR, function (e, data) {
+      if (data && data.fatal) {
+        var code = data.details || '';
+        var tip = '播放失败 [HLS-' + code + ']';
+        if (code.indexOf('NETWORK') > -1) tip = '播放失败 [HLS-NETWORK] 视频源网络异常，请换线路';
+        if (code.indexOf('MANIFEST') > -1) tip = '播放失败 [HLS-MANIFEST] 视频源格式错误，请换线路';
+        Coco.toast(tip);
+      }
+    });
+  } else {
+    video.onerror = function () {
+      var c = video.error ? video.error.code : '?';
+      Coco.toast('播放失败 [VIDEO-' + c + '] 请换线路或联系站长');
+    };
+    video.src = url; if (!isCasting) video.play().catch(function(){});
+  }
+}
+
+document.getElementById('meta').innerHTML = '<div class="load-tip">⏳ 加载中...</div>';
+Coco.detail(vid, function (err, d) {
+  if (err || !d || !d.list || !d.list.length) { document.getElementById('meta').innerHTML = '加载失败，请重试'; return; }
+  VOD = d.list[0];
+  // ===== 会员专享校验：API 返回 vod_is_vip=1 或无播放地址（游客无权限）→ 拦截 =====
+  var vipLocked = VOD.vod_is_vip == 1 || !VOD.vod_play_url || VOD.vod_play_url.length < 8;
+  if (vipLocked) {
+    var vm = document.getElementById('vipMask');
+    if (vm) vm.style.display = 'flex';
+    var vg = document.getElementById('vipGoBtn');
+    if (vg) vg.onclick = function () {
+      if (!Coco.isLogin()) { location.href = 'login.html'; }
+      else { location.href = 'recharge.html'; }
+    };
+    document.getElementById('btnCast').style.display = 'none';
+    document.getElementById('btnDownload').style.display = 'none';
+    document.getElementById('meta').innerHTML = '<div style="text-align:center;color:#f5c518;padding:10px;">👑 本内容为会员专享，开通会员后观看</div>';
+    var _lb = document.querySelector('.line-box'); if (_lb) _lb.style.display = 'none';
+    var _eb = document.querySelector('.ep-box'); if (_eb) _eb.style.display = 'none';
+    return;
+  }
+  // 视频名称
+  document.getElementById('vodTitleBar').style.display = 'block';
+  document.getElementById('vodTitle').textContent = VOD.vod_name || '';
+  document.getElementById('vodTitleSub').textContent =
+    [VOD.vod_remarks, (VOD.vod_year || ''), (VOD.vod_area || '')].filter(Boolean).join(' · ');
+  document.getElementById('meta').innerHTML =
+    (VOD.vod_year || '') + ' / ' + (VOD.vod_area || '') + ' / ' + (VOD.type_name || '') +
+    '<br>豆瓣：<span class="score">' + (VOD.vod_score && parseFloat(VOD.vod_score) > 0 ? VOD.vod_score + ' 分' : '暂无') + '</span>';
+  // 简介（可折叠）
+  var intro = (VOD.vod_content || '').replace(/<[^>]+>/g, '').trim();
+  var ib = document.getElementById('introBox');
+  if (intro) {
+    ib.style.display = 'block';
+    if (intro.length > 60) {
+      var short = intro.slice(0, 60) + '…';
+      ib.innerHTML = '<span class="di-text">' + short + '</span> <span class="di-toggle">简介 ›</span>';
+      ib.querySelector('.di-toggle').onclick = function () {
+        var t = ib.querySelector('.di-text');
+        if (t.textContent.length < 100) { t.textContent = intro; this.textContent = '收起'; }
+        else { t.textContent = short; this.textContent = '简介 ›'; }
+      };
+    } else {
+      ib.innerHTML = '<span class="di-text">' + intro + '</span>';
+    }
+  }
+
+  lines = Coco.parsePlay(VOD);
+  // 线路
+  var lc = document.getElementById('lineCards');
+  if (!lines.length) { lc.innerHTML = '<div class="empty-tip">暂无播放资源</div>'; }
+  lines.forEach(function (l, i) {
+    lc.innerHTML += '<div class="line-card' + (i === 0 ? ' on' : '') + '" data-l="' + i + '"><div class="lc-name">' + l.from + '</div><div class="lc-count">' + l.eps.length + '个视频</div></div>';
+  });
+  lc.querySelectorAll('.line-card').forEach(function (el) {
+    el.onclick = function () {
+      curLine = +el.dataset.l; curEp = 0;
+      lc.querySelectorAll('.line-card').forEach(function (x) { x.classList.remove('on'); });
+      el.classList.add('on'); renderEps();
+    };
+  });
+  renderEps();
+  loadComments();
+  // 收藏状态
+  refreshFavBtn();
+  // 记录历史
+  Coco.addHistory({ vod_id: VOD.vod_id, vod_name: VOD.vod_name, vod_pic: VOD.vod_pic, vod_remarks: VOD.vod_remarks });
+  // 推荐
+  Coco.list(VOD.type_id, 1, function (e2, r2) {
+    document.getElementById('recList').innerHTML = ((r2 && r2.list) || []).filter(function (x) { return x.vod_id != VOD.vod_id; }).slice(0, 12).map(Coco.poster).join('');
+    Coco.imgLazy(document.getElementById('recList'));
+  });
+});
+
+var epsOpen = false; // 选集是否已展开（默认折叠为2行）
+var epsAll = [];
+
+function renderEps() {
+  var line = lines[curLine]; if (!line) return;
+  var eg = document.getElementById('epGrid');
+  document.getElementById('lineCount').textContent = lines.length + '条线路';
+  document.getElementById('epCount').textContent = line.eps.length + '集';
+  epsAll = line.eps.map(function (ep, i) {
+    return '<div class="ep-item' + (i === curEp ? ' on' : '') + '" data-e="' + i + '">' + ep.name + '</div>';
+  });
+  var more = document.getElementById('epMore');
+  eg.innerHTML = epsAll.join('');
+  epsOpen = false;
+  // 动态计算 2 行高度（首个集数项高度 + 网格行间距），超出则折叠并提供展开/收起
+  var first = eg.querySelector('.ep-item');
+  if (first) {
+    var rowH = first.offsetHeight;
+    var gap = 10;
+    var twoRows = rowH * 2 + gap;
+    eg.style.maxHeight = twoRows + 'px';
+    eg.style.overflow = 'hidden';
+    if (eg.scrollHeight > twoRows) {
+      more.style.display = 'block';
+      more.textContent = '展开全部（' + line.eps.length + '集）';
+      more.onclick = function () {
+        if (!epsOpen) {
+          epsOpen = true;
+          eg.style.maxHeight = 'none';
+          eg.style.overflow = 'visible';
+          more.textContent = '收起';
+        } else {
+          epsOpen = false;
+          eg.style.maxHeight = twoRows + 'px';
+          eg.style.overflow = 'hidden';
+          more.textContent = '展开全部（' + line.eps.length + '集）';
+        }
+      };
+    } else {
+      more.style.display = 'none';
+      eg.style.maxHeight = 'none';
+      eg.style.overflow = 'visible';
+    }
+  } else {
+    more.style.display = 'none';
+    eg.style.maxHeight = 'none';
+    eg.style.overflow = 'visible';
+  }
+  bindEps();
+  if (line.eps.length) play(line.eps[0].url);
+}
+
+function bindEps() {
+  document.querySelectorAll('#epGrid .ep-item').forEach(function (el) {
+    el.onclick = function () {
+      switchEp(+el.dataset.e);
+    };
+  });
+}
+
+/* ---------- 评论 ---------- */
+var cmtPage = 1;
+function loadComments(page) {
+  page = page || 1;
+  Coco.comments(vid, page, function (err, d) {
+    var el = document.getElementById('cmtList');
+    var more = document.getElementById('cmtMore');
+    if (err || !d || !d.list || !d.list.length) {
+      if (page == 1) el.innerHTML = '<div class="cmt-empty">暂无评论，快来抢沙发</div>';
+      more.style.display = 'none';
+      return;
+    }
+    var total = d.total || d.list.length;
+    document.getElementById('tabCmt').textContent = '评论(' + total + ')';
+    var html = d.list.map(function (c) {
+      return '<div class="cmt-item"><div class="ci-top"><span class="ci-name">' + c.name + '</span><span class="ci-time">' + c.time + '</span></div><div class="ci-con">' + c.content + '</div></div>';
+    }).join('');
+    if (page == 1) el.innerHTML = html; else el.innerHTML += html;
+    cmtPage = page;
+    more.style.display = (d.list.length >= 20) ? 'block' : 'none';
+  });
+}
+
+document.getElementById('cmtMore').onclick = function () { loadComments(cmtPage + 1); };
+document.getElementById('cmtSend').onclick = function () {
+  var content = document.getElementById('cmtText').value.trim();
+  if (!content) { Coco.toast('评论内容不能为空'); return; }
+  if (!Coco.isLogin()) { Coco.toast('请先登录'); setTimeout(function () { location.href = 'login.html'; }, 600); return; }
+  var btn = this;
+  btn.disabled = true; btn.textContent = '发布中...';
+  Coco.addComment(vid, content, function (err, d) {
+    btn.disabled = false; btn.textContent = '发布';
+    if (!err && d && d.code == 1) {
+      Coco.toast('评论成功');
+      document.getElementById('cmtText').value = '';
+      loadComments(1);
+    } else {
+      var msg = (d && d.msg) || '评论失败';
+      if (String(msg).indexOf('verify') > -1 || String(msg).indexOf('验证码') > -1) {
+        msg = '评论验证码未开启或配置错误，请在后台关闭评论验证码';
+      }
+      Coco.toast(msg);
+    }
+  });
+};
+
+function refreshFavBtn() {
+  var b = document.getElementById('btnFav');
+  if (Coco.isFav(vid)) { b.classList.add('act'); b.querySelector('.da-ico').textContent = '★'; b.lastChild.textContent = '已收藏'; }
+  else { b.classList.remove('act'); b.querySelector('.da-ico').textContent = '☆'; b.lastChild.textContent = '收藏影片'; }
+}
+document.getElementById('btnFav').onclick = function () {
+  if (!VOD) return;
+  var added = Coco.toggleFav(VOD);
+  refreshFavBtn(); Coco.toast(added ? '已加入收藏' : '已取消收藏');
+};
+document.getElementById('btnShare').onclick = function () { Native.share(VOD ? VOD.vod_name : ''); };
+document.getElementById('btnCast').onclick = function () {
+  if (!curUrl) { Coco.toast('请先选择一集'); return; }
+  var video = document.getElementById('video');
+  // 投屏后暂停手机本地播放，显示"正在投屏"遮罩
+  try { video.pause(); } catch (e) {}
+  var mask = document.getElementById('castMask');
+  document.getElementById('castMaskText').textContent = '正在投屏到电视：' + (VOD ? VOD.vod_name : '');
+  mask.style.display = 'flex';
+  Native.cast(curUrl, VOD ? VOD.vod_name : '');
+};
+// 点击遮罩：退出投屏状态，恢复手机本地播放
+document.getElementById('castMask').onclick = function () {
+  this.style.display = 'none';
+  var video = document.getElementById('video');
+  video.play().catch(function () {});
+};
+document.getElementById('btnDownload').onclick = function () {
+  if (!curUrl) { Coco.toast('请先选择一集'); return; }
+  var a = document.createElement('a'); a.href = curUrl; a.download = (VOD ? VOD.vod_name : 'video'); a.target = '_blank';
+  document.body.appendChild(a); a.click(); a.remove(); Coco.toast('已开始下载，如无法下载请用投屏/复制链接');
+};
+// 支持 ?tab=comment 直接打开评论页（深链）
+if (Coco.qs('tab') === 'comment') {
+  var _c = document.querySelector('.detail-tabs a[data-tab="comment"]');
+  if (_c) _c.click();
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>搜索 - COCO影视</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div class="search-page-bar">
+  <span class="back" onclick="history.back()">‹</span>
+  <div class="search-box" style="flex:1;">
+    <input id="kw" placeholder="输入影片名 / 演员">
+  </div>
+  <span style="color:var(--gold);font-weight:700;" onclick="doSearch()">搜索</span>
+</div>
+<div id="suggestBox" class="suggest-box" style="display:none;"></div>
+<div id="hotBox">
+  <div style="padding:14px 14px 4px;color:var(--txt2);">热门搜索</div>
+  <div class="hot-words" id="hotWords"></div>
+</div>
+<div class="section" id="resultBox" style="display:none;">
+  <div class="vod-grid" id="grid"></div>
+  <div class="load-more" id="moreBtn"></div>
+</div>
+<div class="tabbar">
+  <a href="index.html"><span class="t-ico">🏠</span>首页</a>
+  <a href="category.html"><span class="t-ico">🔲</span>分类</a>
+  <a href="rank.html"><span class="t-ico">🔥</span>榜单</a>
+  <a href="fav.html"><span class="t-ico">⭐</span>收藏</a>
+  <a href="mine.html"><span class="t-ico">👤</span>我的</a>
+</div>
+<script src="js/app.js"></script>
+<script>
+var kw = '', pg = 1, loading = false, finished = false;
+['热门电影','电视剧','动漫','综艺','高分','2026','悬疑','动作'].forEach(function (w) {
+  document.getElementById('hotWords').innerHTML += '<a href="javascript:;">' + w + '</a>';
+});
+document.querySelectorAll('.hot-words a').forEach(function (a) {
+  a.onclick = function () { document.getElementById('kw').value = a.textContent; doSearch(); };
+});
+document.getElementById('kw').addEventListener('keydown', function (e) { if (e.keyCode === 13) { hideSug(); doSearch(); } });
+/* ===== 输入联想 ===== */
+var sugTimer = null, sugSeq = 0;
+var sugBox = document.getElementById('suggestBox');
+var kwInput = document.getElementById('kw');
+function hideSug() { sugBox.style.display = 'none'; sugBox.innerHTML = ''; }
+function escHtml(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+function hl(name, kw) {
+  var safe = escHtml(name), k = escHtml(kw);
+  if (k) { var i = safe.toLowerCase().indexOf(k.toLowerCase()); if (i >= 0) return safe.slice(0, i) + '<b>' + safe.slice(i, i + k.length) + '</b>' + safe.slice(i + k.length); }
+  return safe;
+}
+kwInput.addEventListener('input', function () {
+  clearTimeout(sugTimer);
+  var v = kwInput.value.trim();
+  if (!v) { hideSug(); return; }
+  sugBox.style.display = 'block';
+  sugBox.innerHTML = '<div class="sg-loading">联想中...</div>';
+  var my = ++sugSeq;
+  sugTimer = setTimeout(function () {
+    Coco.suggest(v, function (list) {
+      if (my !== sugSeq) return; // 只认最后一次输入
+      if (!list.length) { sugBox.innerHTML = '<div class="sg-empty">无匹配，回车搜索“' + escHtml(v) + '”</div>'; return; }
+      sugBox.innerHTML = list.map(function (it) {
+        return '<div class="sg-item" data-n="' + escHtml(it.name) + '"><span class="sg-ico">🔍</span><span class="sg-name">' + hl(it.name, v) + '</span><span class="sg-rmk">' + escHtml(it.remark || '') + '</span></div>';
+      }).join('');
+      sugBox.querySelectorAll('.sg-item').forEach(function (el) {
+        el.onclick = function () { kwInput.value = el.dataset.n; hideSug(); doSearch(); };
+      });
+    });
+  }, 280);
+});
+// 失焦延迟隐藏，保证点击候选项先触发
+kwInput.addEventListener('blur', function () { setTimeout(hideSug, 200); });
+// 再次聚焦且尚未出结果时，重新弹出联想
+kwInput.addEventListener('focus', function () {
+  if (kwInput.value.trim() && document.getElementById('resultBox').style.display !== 'block') kwInput.dispatchEvent(new Event('input'));
+});
+function doSearch() {
+  hideSug();
+  kw = document.getElementById('kw').value.trim();
+  if (!kw) { Coco.toast('请输入关键词'); return; }
+  pg = 1; finished = false;
+  document.getElementById('hotBox').style.display = 'none';
+  document.getElementById('resultBox').style.display = 'block';
+  document.getElementById('grid').innerHTML = '<div class="loading">搜索中...</div>';
+  load();
+}
+function load() {
+  if (loading || finished) return; loading = true;
+  document.getElementById('moreBtn').textContent = '加载中...';
+  Coco.search(kw, pg, function (err, d) {
+    loading = false;
+    var el = document.getElementById('grid');
+    if (pg === 1) el.innerHTML = '';
+    if (err || !d || !d.list || !d.list.length) {
+      if (pg === 1) el.innerHTML = '<div class="empty-tip">没有找到相关影片</div>';
+      finished = true; document.getElementById('moreBtn').textContent = ''; return;
+    }
+    el.innerHTML += d.list.map(Coco.poster).join('');
+    Coco.imgLazy(el);
+    finished = pg >= (d.pagecount || 1);
+    document.getElementById('moreBtn').textContent = finished ? '已经到底啦' : '加载更多';
+  });
+}
+document.getElementById('moreBtn').onclick = function () { if (!finished) { pg++; load(); } };
+Coco.scrollLoad(function () { if (!loading && !finished && kw) { pg++; load(); } });
+// 支持 ?wd=xxx 直接搜索
+if (Coco.qs('wd')) { document.getElementById('kw').value = Coco.qs('wd'); doSearch(); }
+</script>
+</body>
+</html>

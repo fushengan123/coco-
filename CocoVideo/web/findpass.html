@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>找回密码</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div class="page-top">
+  <span class="pt-back" onclick="history.back()">‹</span>
+  <span class="pt-title">找回密码</span>
+</div>
+
+<div class="form-card">
+  <div class="form-row"><label>账号</label><input id="user_name" placeholder="请输入登录账号"></div>
+  <div class="form-row"><label>找回问题</label><input id="user_question" placeholder="注册时设置的密码找回问题"></div>
+  <div class="form-row"><label>找回答案</label><input id="user_answer" placeholder="请输入问题答案"></div>
+  <div class="form-row"><label>新密码</label><input id="user_pwd" type="password" placeholder="至少6位"></div>
+  <div class="form-row"><label>确认密码</label><input id="user_pwd2" type="password" placeholder="再次输入新密码"></div>
+  <div class="form-row"><label>验证码</label><input id="verify" placeholder="输入右侧验证码"><img class="cap-img" id="capImg" onclick="refreshCap()"></div>
+</div>
+<button class="btn-primary" id="btnFind">立即找回</button>
+<div class="form-tip" id="tip">忘记问题或答案？请联系站长重置密码。验证码看不清点图片刷新。</div>
+
+<div class="tabbar">
+  <a href="index.html"><span class="t-ico">🏠</span>首页</a>
+  <a href="category.html"><span class="t-ico">🔲</span>分类</a>
+  <a href="rank.html"><span class="t-ico">🔥</span>榜单</a>
+  <a href="fav.html"><span class="t-ico">⭐</span>收藏</a>
+  <a href="mine.html"><span class="t-ico">👤</span>我的</a>
+</div>
+
+<script src="js/app.js"></script>
+<script>
+function refreshCap() {
+  document.getElementById('capImg').src = SITE + '/index.php/verify/index?t=' + Date.now();
+}
+refreshCap();
+
+document.getElementById('btnFind').onclick = function () {
+  var btn = this;
+  var name = document.getElementById('user_name').value.trim();
+  var q = document.getElementById('user_question').value.trim();
+  var a = document.getElementById('user_answer').value.trim();
+  var p1 = document.getElementById('user_pwd').value;
+  var p2 = document.getElementById('user_pwd2').value;
+  var v = document.getElementById('verify').value.trim();
+  var tip = document.getElementById('tip');
+  if (!name || !q || !a || !p1 || !p2 || !v) { tip.textContent = '请填写完整信息'; return; }
+  if (p1.length < 6) { tip.textContent = '新密码至少6位'; return; }
+  if (p1 != p2) { tip.textContent = '两次密码不一致'; return; }
+  btn.disabled = true; btn.textContent = '提交中...';
+  Coco.post('/index.php/user/findpass', {
+    user_name: name, user_question: q, user_answer: a,
+    user_pwd: p1, user_pwd2: p2, verify: v
+  }, function (err, d) {
+    btn.disabled = false; btn.textContent = '立即找回';
+    if (!err && d && d.code == 1) {
+      tip.textContent = '✅ 密码重置成功，请用新密码登录';
+      Coco.toast('重置成功');
+      setTimeout(function () { location.href = 'login.html'; }, 1500);
+    } else {
+      tip.textContent = (d && d.msg) ? d.msg : '找回失败，请核对信息';
+      refreshCap(); document.getElementById('verify').value = '';
+    }
+  });
+};
+</script>
+</body>
+</html>

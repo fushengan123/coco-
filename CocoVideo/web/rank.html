@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>榜单 - COCO影视</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div class="back-head"><span class="back" onclick="history.back()">‹</span><h1>影视榜单</h1></div>
+<div class="rank-tabs">
+  <a class="on" data-k="new">最新</a>
+  <a data-k="hits">最热</a>
+  <a data-k="score">高分</a>
+</div>
+<div class="rank-list" id="rankList"><div class="loading">加载中...</div></div>
+<div class="load-more" id="moreBtn"></div>
+<div class="tabbar">
+  <a href="index.html"><span class="t-ico">🏠</span>首页</a>
+  <a href="category.html"><span class="t-ico">🔲</span>分类</a>
+  <a class="on" href="rank.html"><span class="t-ico">🔥</span>榜单</a>
+  <a href="fav.html"><span class="t-ico">⭐</span>收藏</a>
+  <a href="mine.html"><span class="t-ico">👤</span>我的</a>
+</div>
+<script src="js/app.js"></script>
+<script>
+var pool = [], curK = 'new', loaded = false;
+function num(n){ n=parseInt(n)||0; return n>=10000 ? (n/10000).toFixed(1)+'万' : n; }
+function gather(cb, pg, acc) {
+  acc = acc || []; pg = pg || 1;
+  if (pg > 5) { cb(acc); return; }
+  Coco.list('', pg, function (err, d) {
+    if (err || !d || !d.list) { cb(acc); return; }
+    acc = acc.concat(d.list);
+    if (pg >= (d.pagecount || 1)) cb(acc); else gather(cb, pg + 1, acc);
+  });
+}
+function render() {
+  var list = pool.slice();
+  if (curK === 'hits') list.sort(function (a, b) { return (parseInt(b.vod_hits)||0) - (parseInt(a.vod_hits)||0); });
+  if (curK === 'score') list.sort(function (a, b) { return (parseFloat(b.vod_score)||0) - (parseFloat(a.vod_score)||0); });
+  list = list.slice(0, 50);
+  document.getElementById('rankList').innerHTML = list.map(function (v, i) {
+    return '<a class="rank-item" href="detail.html?id=' + v.vod_id + '">' +
+      '<div class="rank-no">' + (i + 1) + '</div>' +
+      '<div class="rank-cover"><img src="' + Coco.pic(v.vod_pic) + '"></div>' +
+      '<div class="rank-info"><div class="r-name">' + v.vod_name + '</div>' +
+      '<div class="r-sub">' + (v.vod_year || '') + ' / ' + (v.vod_area || '') + ' / ' + (v.type_name || '') + '</div>' +
+      (v.vod_remarks ? '<span class="r-remark">' + v.vod_remarks + '</span>' : '') + '</div>' +
+      '<div class="rank-hits">' + (curK === 'score' ? (v.vod_score || '—') + '分' : num(v.vod_hits) + '播放') + '</div></a>';
+  }).join('');
+}
+document.querySelectorAll('.rank-tabs a').forEach(function (a) {
+  a.onclick = function () {
+    document.querySelectorAll('.rank-tabs a').forEach(function (x) { x.classList.remove('on'); });
+    a.classList.add('on'); curK = a.dataset.k;
+    if (loaded) render(); else document.getElementById('rankList').innerHTML = '<div class="loading">加载中...</div>';
+  };
+});
+gather(function (all) {
+  pool = all; loaded = true;
+  document.getElementById('moreBtn').textContent = '';
+  render();
+});
+</script>
+</body>
+</html>

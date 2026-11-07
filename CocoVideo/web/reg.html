@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>注册账号 - COCO影视</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div class="back-head">
+  <span class="back" onclick="history.back()">‹</span>
+  <h1>注册账号</h1>
+</div>
+<div class="auth-page">
+  <div class="auth-card">
+    <h2>加入 COCO</h2>
+    <div class="auth-sub">注册后自动登录，会员功能全平台同步</div>
+    <div class="auth-field"><span>👤</span><input id="name" type="text" placeholder="用户名（字母数字，6位以上）" autocomplete="username"></div>
+    <div class="auth-field"><span>🔒</span><input id="pwd" type="password" placeholder="密码" autocomplete="new-password"></div>
+    <div class="auth-field"><span>🔒</span><input id="pwd2" type="password" placeholder="确认密码" autocomplete="new-password"></div>
+    <div class="auth-msg" id="msg"></div>
+    <div class="auth-btn" id="btnReg">注 册</div>
+    <div class="auth-link">
+      <a href="login.html">已有账号？去登录</a>
+    </div>
+  </div>
+</div>
+<script src="js/app.js"></script>
+<script>
+var btn = document.getElementById('btnReg');
+function doReg() {
+  var name = document.getElementById('name').value.trim();
+  var pwd = document.getElementById('pwd').value;
+  var pwd2 = document.getElementById('pwd2').value;
+  var msg = document.getElementById('msg');
+  if (!name || !pwd || !pwd2) { msg.textContent = '请填写完整信息'; return; }
+  if (pwd != pwd2) { msg.textContent = '两次密码不一致'; return; }
+  msg.textContent = '注册中...';
+  btn.style.opacity = '.6';
+  Coco.reg(name, pwd, pwd2, function (err, d) {
+    btn.style.opacity = '1';
+    if (err) { msg.textContent = '网络错误，请重试'; return; }
+    if (d && d.code == 1) {
+      msg.textContent = '注册成功，已自动登录';
+      setTimeout(function () { location.href = 'mine.html'; }, 800);
+    } else {
+      msg.textContent = (d && d.msg) ? d.msg : '注册失败';
+    }
+  });
+}
+btn.onclick = doReg;
+document.getElementById('pwd2').addEventListener('keydown', function (e) { if (e.key === 'Enter') doReg(); });
+</script>
+</body>
+</html>

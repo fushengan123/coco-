@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>个人资料</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div class="page-top">
+  <span class="pt-back" onclick="history.back()">‹</span>
+  <span class="pt-title">个人资料</span>
+</div>
+
+<div class="member-card">
+  <div class="mc-top">
+    <div class="mc-avatar">👤</div>
+    <div>
+      <div class="mc-name" id="pName">加载中...</div>
+      <div class="mc-sub" id="pGroup">会员等级</div>
+    </div>
+  </div>
+</div>
+
+<div class="info-card">
+  <div class="info-row"><span class="info-label">会员等级</span><span class="info-val" id="pGroup2">-</span></div>
+  <div class="info-row"><span class="info-label">当前积分</span><span class="info-val" id="pPoints">-</span></div>
+  <div class="info-row"><span class="info-label">到期时间</span><span class="info-val" id="pEnd">-</span></div>
+  <div class="info-row"><span class="info-label">上次登录</span><span class="info-val" id="pLast">-</span></div>
+  <div class="info-row"><span class="info-label">登录次数</span><span class="info-val" id="pNum">-</span></div>
+</div>
+
+<div class="tabbar">
+  <a href="index.html"><span class="t-ico">🏠</span>首页</a>
+  <a href="category.html"><span class="t-ico">🔲</span>分类</a>
+  <a href="rank.html"><span class="t-ico">🔥</span>榜单</a>
+  <a href="fav.html"><span class="t-ico">⭐</span>收藏</a>
+  <a class="on" href="mine.html"><span class="t-ico">👤</span>我的</a>
+</div>
+
+<script src="js/app.js"></script>
+<script>
+(function () {
+  if (!Coco.isLogin()) { location.href = 'login.html'; return; }
+  var set = function (id, v) { document.getElementById(id).textContent = v || '-'; };
+  Coco.memberInfo(function (err, info) {
+    if (err || !info) return;
+    set('pName', info.name);
+    set('pGroup', info.group);
+    set('pGroup2', info.group);
+    set('pPoints', info.points);
+    set('pLast', info.lastLogin);
+    set('pNum', info.loginNum);
+  });
+  Coco.upgradeData(function (err2, d) {
+    if (!err2 && d) set('pEnd', d.endTime);
+  });
+})();
+</script>
+</body>
+</html>
