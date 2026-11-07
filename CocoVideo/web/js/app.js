@@ -16,6 +16,13 @@ var Coco = {
     if (err) { cb(new Error(err)); return; }
     try { cb(null, JSON.parse(text)); } catch (e) { cb(null, { __raw: text }); }
   },
+  // 原生图片代理回传：uri 为 data:image/...;base64,xxx
+  _nativeImg: function (cbId, uri) {
+    var cb = Coco._nbcbs[cbId];
+    if (!cb) return;
+    delete Coco._nbcbs[cbId];
+    cb(uri ? null : new Error('img'), uri || '');
+  },
   /* ---------- 底层请求：APP内走原生OkHttp，浏览器走JSONP ---------- */
   jsonp: function (params, cb) {
     params.ac = params.ac || 'list';
@@ -525,7 +532,7 @@ var Coco = {
   },
   /* ---------- 工具 ---------- */
   pic: function (p) {
-    if (!p) return 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="120" height="160"><rect width="100%" height="100%" fill="%23222"/><text x="50%" y="50%" fill="%23555" font-size="12" text-anchor="middle">暂无图</text></svg>';
+    if (!p) return Coco.placeholder(120, 160);
     if (p.indexOf('//') === 0) p = 'http:' + p;
     else if (p.indexOf('http') !== 0 && p.indexOf('data:') !== 0) p = SITE + (p.charAt(0) === '/' ? '' : '/') + p;
     return p;
@@ -542,12 +549,34 @@ var Coco = {
     return m ? decodeURIComponent(m[1]) : '';
   },
   poster: function (v) {
-    var ph = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="160" height="220"><rect width="100%" height="100%" fill="#1c1e26"/></svg>');
+    var ph = Coco.placeholder(160, 220);
     return '<a class="poster" href="detail.html?id=' + v.vod_id + '">' +
-      '<div class="p-img"><img data-src="' + Coco.pic(v.vod_pic) + '" src="' + ph + '" loading="lazy">' +
+      '<div class="p-img"><img data-src="' + Coco.pic(v.vod_pic) + '" src="' + ph + '" loading="lazy"' +
+      ' onerror="Coco.imgFallback(this)">' +
       (v.vod_score && parseFloat(v.vod_score) > 0 ? '<span class="p-score">' + v.vod_score + '分</span>' : '') +
       (v.vod_remarks ? '<span class="p-remark">' + v.vod_remarks + '</span>' : '') +
       '</div><div class="p-name">' + (v.vod_name || '') + '</div></a>';
+  },
+  /* ---------- 占位图：必须 encodeURIComponent，Safari 不认裸的 <svg> ---------- */
+  placeholder: function (w, h) {
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '">'
+      + '<rect width="100%" height="100%" fill="#1c1e26"/>'
+      + '<text x="50%" y="50%" fill="#4a4f5e" font-size="12" text-anchor="middle">暂无图</text></svg>';
+    return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+  },
+  /* ---------- 原图加载失败 → 走原生代理取字节（绕开证书链/防盗链/UA 问题） ---------- */
+  imgFallback: function (img) {
+    if (!img || img.getAttribute('data-nbf') === '1') return;
+    var url = img.getAttribute('data-src') || img.getAttribute('src') || '';
+    if (!url || url.indexOf('data:') === 0) return;
+    img.setAttribute('data-nbf', '1');
+    if (!(window.AndroidBridge && AndroidBridge.img)) return;
+    var cbId = 'im_' + (++Coco._seq);
+    Coco._nbcbs[cbId] = function (err, uri) {
+      if (!err && uri) { img.src = uri; }
+    };
+    try { AndroidBridge.img(url, cbId); }
+    catch (e) { delete Coco._nbcbs[cbId]; }
   },
   /* ---------- 图片懒加载（IO + 轮询兜底，保证任何环境都出图） ---------- */
   _lazyObs: null,
@@ -565,7 +594,8 @@ var Coco = {
           if (en.isIntersecting) {
             var img = en.target;
             var ds = img.getAttribute('data-src');
-            if (ds && img.getAttribute('src') !== ds) img.src = ds;
+            // data-nbf=1 表示已由原生代理取到图，别再覆盖回原始地址
+            if (ds && img.getAttribute('data-nbf') !== '1' && img.getAttribute('src') !== ds) img.src = ds;
             Coco._lazyObs.unobserve(img);
           }
         });
@@ -580,6 +610,7 @@ var Coco = {
         var all = true;
         list.forEach(function (img) {
           var ds = img.getAttribute('data-src');
+          if (img.getAttribute('data-nbf') === '1') return;
           if (img.getAttribute('src') === ds) return;
           var r = img.getBoundingClientRect();
           if (r.top < vh + 400 && r.bottom > -120) { img.src = ds; }

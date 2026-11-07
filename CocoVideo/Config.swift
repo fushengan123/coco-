@@ -41,6 +41,7 @@ enum Config {
         request: function (url, cb) { send({ m: 'request', url: String(url), cb: String(cb) }); },
         post: function (url, data, cb) { send({ m: 'post', url: String(url), data: String(data == null ? '' : data), cb: String(cb) }); },
         cast: function (url, title) { send({ m: 'cast', url: String(url || ''), title: String(title || '') }); },
+        img: function (url, cb) { send({ m: 'img', url: String(url || ''), cb: String(cb) }); },
         share: function (title, url) { send({ m: 'share', title: String(title || ''), url: String(url || '') }); },
         copy: function (text) { send({ m: 'copy', text: String(text || '') }); },
         openWeb: function (url) { send({ m: 'openWeb', url: String(url || '') }); }

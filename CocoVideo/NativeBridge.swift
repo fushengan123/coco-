@@ -19,6 +19,7 @@ final class NativeBridge: NSObject, WKScriptMessageHandler {
         case "request": handleRequest(body, form: nil)
         case "post":    handleRequest(body, form: (body["data"] as? String) ?? "")
         case "cast":    handleCast(body)
+        case "img":     handleImage(body)
         case "share":   handleShare(body)
         case "copy":    handleCopy(body)
         case "openWeb": handleOpenWeb(body)
@@ -37,6 +38,24 @@ final class NativeBridge: NSObject, WKScriptMessageHandler {
         let cb = (body["cb"] as? String) ?? ""
         NativeHTTP.shared.send(url: url, form: form, userAgent: Config.mobileUserAgent) { [weak self] text, err in
             let js = JSUtil.resp(cb: cb, body: text, err: err)
+            DispatchQueue.main.async {
+                self?.webView?.evaluateJavaScript(js, completionHandler: nil)
+            }
+        }
+    }
+
+    // MARK: - 图片代理
+
+    private func handleImage(_ body: [String: Any]) {
+        guard let raw = body["url"] as? String,
+              let url = URL(string: raw),
+              let scheme = url.scheme?.lowercased(),
+              scheme == "http" || scheme == "https" else { return }
+
+        let cb = (body["cb"] as? String) ?? ""
+        ImageProxy.shared.load(url) { [weak self] uri in
+            let payload = uri.map(JSUtil.quote) ?? "null"
+            let js = "window.Coco&&Coco._nativeImg(\(JSUtil.quote(cb)),\(payload));"
             DispatchQueue.main.async {
                 self?.webView?.evaluateJavaScript(js, completionHandler: nil)
             }
