@@ -49,6 +49,8 @@ final class WebViewController: UIViewController {
         config.preferences.javaScriptCanOpenWindowsAutomatically = true
 
         config.setURLSchemeHandler(LocalSchemeHandler(root: Config.webRoot), forURLScheme: Config.scheme)
+        // 图片走原生取图协议：<img src="cocoimg://img/?u=...">
+        config.setURLSchemeHandler(ImageSchemeHandler(), forURLScheme: ImageSchemeHandler.scheme)
 
         let controller = config.userContentController
         bridge.host = self

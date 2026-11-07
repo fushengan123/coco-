@@ -609,10 +609,12 @@ var Coco = {
   _lazyTimer: null,
   /* ---------- 图片加载 ----------
      iOS 上 WebKit 直接拉图经常失败（图片站证书链不全 / 防盗链 / UA 判定），
-     所以 cocoapp 协议下统一走原生取图，取回 base64 再由原生缓存。
+     所以 cocoapp 协议下把 <img src> 指到 cocoimg:// 协议，
+     由原生取字节（放行证书链、压到 480px）后直接回给 WebKit，
+     不走 base64 回传，也不会因为大字符串卡住。
      安卓是 file://，直接拉图本来就没问题，保持原样。 */
   _useNativeImg: function () {
-    return location.protocol === 'cocoapp:' && !!(window.AndroidBridge && AndroidBridge.img);
+    return location.protocol === 'cocoapp:';
   },
   loadImg: function (img) {
     if (!img) return;
@@ -622,18 +624,11 @@ var Coco = {
     if (ds.indexOf('data:') === 0) return;      // 占位图，等真地址回填
     img.setAttribute('data-nbf', '1');
     if (!Coco._useNativeImg()) { img.src = ds; return; }
-    var cbId = 'im_' + (++Coco._seq);
-    Coco._nbcbs[cbId] = function (err, uri) {
-      if (!err && uri) { img.src = uri; return; }
-      img.setAttribute('data-nbf', '0');        // 原生也拿不到就退回直连
-      img.src = ds;
+    img.onerror = function () {
+      img.onerror = null;
+      img.src = ds;                             // 协议处理器也失败，退回直连
     };
-    try { AndroidBridge.img(ds, cbId); }
-    catch (e) {
-      delete Coco._nbcbs[cbId];
-      img.setAttribute('data-nbf', '0');
-      img.src = ds;
-    }
+    img.src = 'cocoimg://img/?u=' + encodeURIComponent(ds);
   },
   imgLazy: function (root) {
     var imgs = (root || document).querySelectorAll('img[data-src]');

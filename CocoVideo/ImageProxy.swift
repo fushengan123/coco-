@@ -1,83 +1,164 @@
 import Foundation
 import UIKit
+import WebKit
 
-/// 图片代理：H5 里 <img> 直接加载失败时（证书链不全 / 防盗链 / UA 判定），
-/// 由原生取字节再转成 data URI 回传给页面。
-/// 这些图片站经常只部署了叶证书，WebKit 校验不过就直接空白，原生这边可以放行。
+/// 图片代理：图片站普遍只部署叶证书、开了防盗链，WebKit 校验不过就直接裂图。
+/// 原生这边拿字节（放行证书链 + 正确 UA/Referer），顺手压到 480px 再交回去。
+///
+/// 两种出口：
+///  - `loadData`  → 给 cocoimg:// 协议处理器用，直接把字节喂给 <img>（主路径）
+///  - `load`      → 老桥接接口，base64 data URI（保留兜底）
 final class ImageProxy {
 
     static let shared = ImageProxy()
 
-    private let cache = NSCache<NSURL, NSString>()
+    private let dataCache = NSCache<NSURL, NSData>()
+    private let uriCache = NSCache<NSURL, NSString>()
 
     private lazy var session: URLSession = {
         let cfg = URLSessionConfiguration.ephemeral
         cfg.timeoutIntervalForRequest = 15
         cfg.timeoutIntervalForResource = 25
         cfg.httpMaximumConnectionsPerHost = 6
+        cfg.urlCache = nil
         return URLSession(configuration: cfg, delegate: PermissiveTLS(), delegateQueue: nil)
     }()
 
     private init() {
-        cache.countLimit = 150
+        dataCache.countLimit = 200
+        uriCache.countLimit = 150
     }
 
+    // MARK: - 主路径：返回字节
+
+    func loadData(_ url: URL, completion: @escaping (Data?) -> Void) {
+        if let hit = dataCache.object(forKey: url as NSURL) {
+            completion(hit as Data)
+            return
+        }
+        fetch(url) { [weak self] data in
+            guard let self = self, let data = data else {
+                completion(nil)
+                return
+            }
+            let out = Self.downscale(data) ?? data
+            self.dataCache.setObject(out as NSData, forKey: url as NSURL)
+            completion(out)
+        }
+    }
+
+    // MARK: - 兼容路径：返回 base64 data URI
+
     func load(_ url: URL, completion: @escaping (String?) -> Void) {
-        if let hit = cache.object(forKey: url as NSURL) {
+        if let hit = uriCache.object(forKey: url as NSURL) {
             completion(hit as String)
             return
         }
+        loadData(url) { [weak self] data in
+            guard let self = self, let data = data else {
+                completion(nil)
+                return
+            }
+            let uri = "data:image/jpeg;base64," + data.base64EncodedString()
+            self.uriCache.setObject(uri as NSString, forKey: url as NSURL)
+            completion(uri)
+        }
+    }
 
+    // MARK: - 取字节
+
+    private func fetch(_ url: URL, completion: @escaping (Data?) -> Void) {
         var request = URLRequest(url: url)
         request.setValue(Config.mobileUserAgent, forHTTPHeaderField: "User-Agent")
         request.setValue("\(url.scheme ?? "https")://\(url.host ?? "")/", forHTTPHeaderField: "Referer")
         request.setValue("image/webp,image/apng,image/*,*/*;q=0.8", forHTTPHeaderField: "Accept")
 
-        session.dataTask(with: request) { [weak self] data, response, error in
-            guard let self = self,
-                  error == nil,
+        session.dataTask(with: request) { data, _, error in
+            guard error == nil,
                   let data = data,
                   !data.isEmpty,
-                  data.count <= 4_000_000 else {
+                  data.count <= 8_000_000 else {
                 completion(nil)
                 return
             }
-            // 海报位只显示 ~120pt 宽，原图 250KB 传过来又慢又占内存，
-            // 统一压到 480px 的 JPEG 再回传（约 40~60KB），显示效果没有区别。
-            let uri: String
-            if let encoded = Self.reencode(data) {
-                uri = "data:image/jpeg;base64," + encoded
-            } else {
-                let mime = Self.mimeType(response: response, data: data)
-                uri = "data:\(mime);base64,\(data.base64EncodedString())"
-            }
-            self.cache.setObject(uri as NSString, forKey: url as NSURL)
-            completion(uri)
+            completion(data)
         }.resume()
     }
 
-    /// 压到 480px 宽的 JPEG，返回 base64；解不了就返回 nil 交给原图
-    private static func reencode(_ data: Data) -> String? {
+    /// 压到 480px 宽的 JPEG；解不了（webp/异常）就返回 nil，由调用方用原字节
+    static func downscale(_ data: Data) -> Data? {
         guard let image = UIImage(data: data) else { return nil }
         let maxWidth: CGFloat = 480
         let scale = min(1, maxWidth / max(image.size.width, 1))
         let size = CGSize(width: round(image.size.width * scale),
                           height: round(image.size.height * scale))
+        guard size.width > 0, size.height > 0 else { return nil }
         let renderer = UIGraphicsImageRenderer(size: size)
         let out = renderer.image { _ in
             image.draw(in: CGRect(origin: .zero, size: size))
         }
-        guard let jpeg = out.jpegData(compressionQuality: 0.78) else { return nil }
-        return jpeg.base64EncodedString()
+        return out.jpegData(compressionQuality: 0.78)
+    }
+}
+
+/// cocoimg://img/?u=<percent-encoded https url>
+/// 让 <img src> 直接走原生取图，避免把 base64 大字符串塞回 JS。
+final class ImageSchemeHandler: NSObject, WKURLSchemeHandler {
+
+    static let scheme = "cocoimg"
+    static let host = "img"
+
+    static func makeURL(_ raw: String) -> String? {
+        let encoded = raw.addingPercentEncoding(withAllowedCharacters: .alphanumerics)
+            ?? raw.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)
+        guard let encoded = encoded else { return nil }
+        return "\(scheme)://\(host)/?u=\(encoded)"
     }
 
-    private static func mimeType(response: URLResponse?, data: Data) -> String {
-        if let type = response?.mimeType, type.hasPrefix("image/") { return type }
-        let bytes = [UInt8](data.prefix(8))
-        if bytes.count > 2, bytes[0] == 0xFF, bytes[1] == 0xD8 { return "image/jpeg" }
-        if bytes.count > 4, bytes[0] == 0x89, bytes[1] == 0x50 { return "image/png" }
-        if bytes.count > 4, bytes[0] == 0x52, bytes[1] == 0x49 { return "image/webp" }
-        return "image/jpeg"
+    static func target(from url: URL) -> URL? {
+        guard url.scheme?.lowercased() == scheme else { return nil }
+        guard let comps = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let value = comps.queryItems?.first(where: { $0.name == "u" })?.value,
+              let target = URL(string: value),
+              let s = target.scheme?.lowercased(), s == "http" || s == "https" else { return nil }
+        return target
+    }
+
+    func webView(_ webView: WKWebView, start urlSchemeTask: WKURLSchemeTask) {
+        guard let url = urlSchemeTask.request.url,
+              let target = Self.target(from: url) else {
+            urlSchemeTask.didFailWithError(NSError(domain: "cocoimg", code: 400))
+            return
+        }
+
+        ImageProxy.shared.loadData(target) { data in
+            guard let data = data else {
+                DispatchQueue.main.async {
+                    urlSchemeTask.didFailWithError(NSError(domain: "cocoimg", code: 404))
+                }
+                return
+            }
+            DispatchQueue.main.async {
+                let headers: [String: String] = [
+                    "Content-Type": "image/jpeg",
+                    "Content-Length": String(data.count),
+                    "Cache-Control": "max-age=86400",
+                    "Access-Control-Allow-Origin": "*"
+                ]
+                guard let response = HTTPURLResponse(url: url, statusCode: 200,
+                                                     httpVersion: "HTTP/1.1", headerFields: headers) else {
+                    urlSchemeTask.didFailWithError(NSError(domain: "cocoimg", code: 500))
+                    return
+                }
+                urlSchemeTask.didReceive(response)
+                urlSchemeTask.didReceive(data)
+                urlSchemeTask.didFinish()
+            }
+        }
+    }
+
+    func webView(_ webView: WKWebView, stop urlSchemeTask: WKURLSchemeTask) {
+        // 单张图很小，不做取消处理
     }
 }
 
