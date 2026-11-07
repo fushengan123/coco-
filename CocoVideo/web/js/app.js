@@ -1,6 +1,6 @@
 /* ========== COCO APP 核心库 ========== */
 // 站点地址：APP内（file://）用绝对地址；网页版（http/https 同源）用相对地址
-var SITE = (location.protocol === 'http:' || location.protocol === 'https:') ? '' : 'https://8588.eu.org';
+var SITE = (location.protocol === 'http:' || location.protocol === 'https:') ? '' : 'https://dutv.eu.org';
 var API = SITE + '/api.php/provide/vod/';
 
 var Coco = {
