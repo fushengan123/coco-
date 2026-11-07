@@ -138,10 +138,11 @@ var Coco = {
   /* ---------- 原始文本请求（会员页数据源，HTML解析用） ---------- */
   getRaw: function (path, cb) {
     var url = path.indexOf('http') === 0 ? path : SITE + path;
-    // APP 内页面源是 cocoapp://local/（file:// 同理），用 fetch 打 https 属于跨源不透明请求，
-    // WebKit 会直接拦掉且不返回错误 → 回调永远不来。所以 APP 内必须先走原生通道。
-    var inApp = location.protocol === 'cocoapp:' || location.protocol === 'file:';
-    if ((inApp || !window.fetch) && window.AndroidBridge && AndroidBridge.request) {
+    // iOS 的页面源是 cocoapp://local/，用 fetch 打 https 属于跨源不透明请求，
+    // WebKit 会直接拦掉且不报错 → 回调永远不来，所以这种协议下必须先走原生通道。
+    // 安卓是 file://（开了通用访问），fetch 本来就能通，保持原逻辑不动。
+    var iosScheme = location.protocol === 'cocoapp:';
+    if ((iosScheme || !window.fetch) && window.AndroidBridge && AndroidBridge.request) {
       var cbId0 = 'nb_' + (++Coco._seq);
       var done0 = false;
       var timer0 = setTimeout(function () {
