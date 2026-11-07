@@ -64,7 +64,10 @@ var page = 1, loading = false, hasMore = true;
 
 // 渲染一级分类
 Coco.loadClasses(function (cls) {
+  cls = cls || [];
+  // 有的后台不返回 type_pid，过滤后会是空数组 → 退化成直接用整个列表
   var tops = cls.filter(function (c) { return c.type_pid == 0; });
+  if (!tops.length) tops = cls;
   var tabs = document.getElementById('catTabs');
   tops.slice(0, 10).forEach(function (c) {
     var a = document.createElement('a');

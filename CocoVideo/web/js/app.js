@@ -257,7 +257,7 @@ var Coco = {
   },
   /* ---------- 获取顶级分类（探测频道页子导航，服务器API无type_pid层级） ---------- */
   loadClasses: function (cb) {
-    var CACHE_KEY = 'coco_classes_v5';
+    var CACHE_KEY = 'coco_classes_v6';
     if (Coco.classes.length) { cb && cb(Coco.classes); return; }
     try {
       var c = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
@@ -292,6 +292,17 @@ var Coco = {
         }).filter(Boolean);
         tops.push({ type_id: t.type_id, type_name: t.type_name, subs: subs });
       });
+      // 内置层级表一个都没命中 → 说明换站了（或后台把分类重排成别的 ID 段）。
+      // 这时不能报"分类加载失败"，直接按 API 返回的扁平列表渲染，保证永远有分类可选。
+      if (!tops.length) {
+        all.forEach(function (c) {
+          tops.push({ type_id: c.type_id, type_name: c.type_name, subs: [] });
+        });
+        Coco.classes = tops;
+        try { localStorage.setItem(CACHE_KEY, JSON.stringify({ t: Date.now(), tops: tops })); } catch (e6) {}
+        cb && cb(tops);
+        return;
+      }
       // 补充：内置表未覆盖的分类（后台未来新增）——探测其频道页，有子导航视为新顶级
       var topIds = {}, subIds = {};
       tops.forEach(function (t) {
