@@ -86,6 +86,8 @@ input,button{border:none;outline:none;font-family:inherit;}
 
 /* ---------- 我的页面 ---------- */
 .mine-banner{background:linear-gradient(135deg,#2a2410,#1a1a22 70%);padding:26px 18px 22px;display:flex;align-items:center;gap:14px;}
+/* 刘海/灵动岛：我的页横幅顶部内容下移，别被岛压住 */
+.mine-banner{padding-top:calc(26px + env(safe-area-inset-top,0px));}
 .mine-avatar{width:62px;height:62px;border-radius:50%;background:var(--gold);display:flex;align-items:center;justify-content:center;font-size:28px;color:#1a1a1a;flex-shrink:0;overflow:hidden;}
 .mine-avatar img{width:100%;height:100%;object-fit:cover;}
 .mine-login-name{font-size:19px;font-weight:700;}

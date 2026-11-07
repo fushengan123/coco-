@@ -380,11 +380,13 @@ var Coco = {
     }
     Coco.jsonp(opt, function (err, d) {
       if (!err && d && d.list && d.list.length) {
-        // 先补封面再存缓存，保证缓存里也有缩略图
+        // 先出列表（缺图的先显示占位块），封面在后台补齐后回填，
+        // 别让一批 ac=detail 请求把整个列表卡住。
+        outCb && outCb(null, d);
         Coco.fillPosters(d, function (e2, d2) {
           var dd = (e2 || !d2) ? d : d2;
           try { localStorage.setItem(key, JSON.stringify({ t: Date.now(), d: dd })); } catch (e) {}
-          outCb && outCb(e2, dd);
+          Coco._onPicsFilled(dd);
         });
       } else if (hit && hit.d && hit.d.list && hit.d.list.length) {
         outCb && outCb(null, hit.d);   // 网络失败回退缓存
@@ -399,7 +401,7 @@ var Coco = {
     var need = d.list.some(function (v) { return !v.vod_pic; });
     if (!need) { cb && cb(null, d); return; }
     var arr = d.list.slice(), map = {}, batches = [];
-    while (arr.length) batches.push(arr.splice(0, 10).map(function (v) { return v.vod_id; }).join(','));
+    while (arr.length) batches.push(arr.splice(0, 20).map(function (v) { return v.vod_id; }).join(','));
     if (!batches.length) { cb && cb(null, d); return; }
     var left = batches.length;
     batches.forEach(function (ids) {
@@ -421,10 +423,11 @@ var Coco = {
     if (hit && hit.d && hit.d.list && hit.d.list.length && (Date.now() - hit.t < 1800000)) { cb && cb(null, hit.d); return; }
     Coco.jsonp({ wd: wd, pg: pg || 1 }, function (err, d) {
       if (!err && d && d.list && d.list.length) {
+        cb && cb(null, d);   // 先出搜索结果，封面后台补
         Coco.fillPosters(d, function (e2, d2) {
           var dd = (e2 || !d2) ? d : d2;
           try { localStorage.setItem(key, JSON.stringify({ t: Date.now(), d: dd })); } catch (e) {}
-          cb && cb(e2, dd);
+          Coco._onPicsFilled(dd);
         });
       } else if (hit && hit.d && hit.d.list && hit.d.list.length) { cb && cb(null, hit.d); }
       else { cb && cb(err, d); }
@@ -565,6 +568,26 @@ var Coco = {
     return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
   },
   /* ---------- 原图加载失败 → 走原生代理取字节（绕开证书链/防盗链/UA 问题） ---------- */
+  /* ---------- 封面补齐后回填到已渲染的列表（按 detail.html?id= 对位） ---------- */
+  _onPicsFilled: function (d) {
+    if (!d || !d.list || !d.list.length) return;
+    var map = {};
+    d.list.forEach(function (v) {
+      if (v && v.vod_id && v.vod_pic) map[String(v.vod_id)] = v.vod_pic;
+    });
+    if (!Object.keys(map).length) return;
+    var imgs = document.querySelectorAll('a.poster img[data-src]');
+    imgs.forEach(function (img) {
+      if (img.getAttribute('data-nbf') === '1') return;
+      var link = img.closest('a.poster');
+      if (!link) return;
+      var m = /[?&]id=(\d+)/.exec(link.getAttribute('href') || '');
+      if (!m || !map[m[1]]) return;
+      var next = Coco.pic(map[m[1]]);
+      if (img.getAttribute('data-src') !== next) img.setAttribute('data-src', next);
+    });
+    Coco.imgLazy(document);
+  },
   imgFallback: function (img) {
     if (!img || img.getAttribute('data-nbf') === '1') return;
     var url = img.getAttribute('data-src') || img.getAttribute('src') || '';
