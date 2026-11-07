@@ -66,6 +66,8 @@ enum Config {
           '#catTabs{top:calc(48px + var(--sat)) !important}',
           '.sub-row{top:calc(48px + var(--sat)) !important}',
           '.rank-tabs{top:calc(48px + var(--sat)) !important}',
+          '.suggest-box{top:calc(62px + var(--sat)) !important}',
+          'input,textarea{scroll-margin-top:calc(var(--sat) + 70px)}',
           'body{-webkit-tap-highlight-color:transparent}',
           'video::-webkit-media-controls-start-playback-button{display:none !important}',
           '::-webkit-scrollbar{display:none}'
@@ -85,6 +87,22 @@ enum Config {
         }
         measureInsets();
         setTimeout(measureInsets, 300);
+
+        // 输入框聚焦时 iOS 会把它顶到屏幕最上方，正好钻进灵动岛下面。
+        // 键盘弹出后再校一次位置，保证光标始终在安全区内。
+        document.addEventListener('focusin', function (e) {
+          var t = e.target;
+          if (!t || !/^(INPUT|TEXTAREA)$/.test(t.tagName)) return;
+          [80, 300, 650].forEach(function (d) {
+            setTimeout(function () {
+              try {
+                var sat = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sat')) || 0;
+                var r = t.getBoundingClientRect();
+                if (r.top < sat + 10) { window.scrollBy(0, r.top - sat - 10); }
+              } catch (err) { }
+            }, d);
+          });
+        }, true);
       } catch (e) { }
 
       // iOS 自带 HLS：原生 <video src="x.m3u8"> 比 hls.js 的跨域 MSE 稳，
