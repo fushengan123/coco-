@@ -58,9 +58,8 @@ function topName() {
   return t ? t.type_name : '全部';
 }
 
-Coco.loadClasses(function (cls) {
-  CLS = cls || [];
-  var tops = CLS; // loadClasses 已返回顶级列表（每项含 subs 二级）
+function renderTabs(tops, skipLoad) {
+  tops = tops || [];
   var tabs = document.getElementById('catTabs');
   tabs.innerHTML = ''; // 防重复渲染
   if (!tops.length) {
@@ -87,8 +86,21 @@ Coco.loadClasses(function (cls) {
     tabs.appendChild(a);
   });
   renderSubs();
-  load();
+  if (!skipLoad) load();
+}
+
+Coco.loadClasses(function (cls) {
+  CLS = cls || [];
+  renderTabs(CLS);
 });
+
+// 后台补探测到的分类回来时热更新标签条，不动当前列表（避免重复追加）
+Coco.onClassesLate = function (cls) {
+  if (!cls || !cls.length) return;
+  if (cls.length === CLS.length) return;
+  CLS = cls;
+  renderTabs(CLS, true);
+};
 
 // 当前顶级是否含二级
 function subsOf(id) {

@@ -54,8 +54,12 @@ final class NativeBridge: NSObject, WKScriptMessageHandler {
         }
         DispatchQueue.main.async { [weak self] in
             guard let self = self, let host = self.host else { return }
-            let vc = CastViewController(mediaURL: url, title: title, poster: nil)
-            vc.modalPresentationStyle = .fullScreen
+            let vc = CastPanelViewController(mediaURL: url, title: title)
+            // 结果回传 H5：成功保留遮罩，失败让页面恢复本地播放
+            vc.onResult = { [weak self] ok, message in
+                let js = "window.__cocoCastResult&&window.__cocoCastResult(\(ok ? "true" : "false"),\(JSUtil.quote(message)));"
+                self?.webView?.evaluateJavaScript(js, completionHandler: nil)
+            }
             host.present(vc, animated: true, completion: nil)
         }
     }

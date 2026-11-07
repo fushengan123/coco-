@@ -58,12 +58,33 @@ enum Config {
         }
         var style = document.createElement('style');
         style.textContent = [
-          '.topbar{padding-top:calc(12px + env(safe-area-inset-top)) !important}',
+          ':root{--sat:0px;--sab:0px}',
+          '.topbar{padding-top:calc(12px + var(--sat)) !important}',
+          '.back-head{padding-top:calc(12px + var(--sat)) !important}',
+          '.search-page-bar{padding-top:calc(12px + var(--sat)) !important}',
+          '.page-top{height:auto !important;min-height:calc(50px + var(--sat)) !important;padding-top:var(--sat) !important}',
+          '#catTabs{top:calc(48px + var(--sat)) !important}',
+          '.sub-row{top:calc(48px + var(--sat)) !important}',
+          '.rank-tabs{top:calc(48px + var(--sat)) !important}',
           'body{-webkit-tap-highlight-color:transparent}',
           'video::-webkit-media-controls-start-playback-button{display:none !important}',
           '::-webkit-scrollbar{display:none}'
         ].join('');
         (document.head || document.documentElement).appendChild(style);
+
+        // env() 在 calc 里可用，但 JS 读不到；用探针量出实际安全区，供 sticky 偏移使用
+        function measureInsets() {
+          try {
+            var p = document.createElement('div');
+            p.style.cssText = 'position:fixed;left:0;top:0;width:0;height:env(safe-area-inset-top,0px);visibility:hidden;pointer-events:none';
+            document.documentElement.appendChild(p);
+            var sat = p.getBoundingClientRect().height || 0;
+            p.remove();
+            document.documentElement.style.setProperty('--sat', sat + 'px');
+          } catch (e) { }
+        }
+        measureInsets();
+        setTimeout(measureInsets, 300);
       } catch (e) { }
 
       // iOS 自带 HLS：原生 <video src="x.m3u8"> 比 hls.js 的跨域 MSE 稳，

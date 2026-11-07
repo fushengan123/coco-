@@ -138,12 +138,34 @@ var Coco = {
   /* ---------- 原始文本请求（会员页数据源，HTML解析用） ---------- */
   getRaw: function (path, cb) {
     var url = path.indexOf('http') === 0 ? path : SITE + path;
-    // WebView内优先走浏览器fetch（等同正常浏览器访问，服务器放行；原生OkHttp通道常被服务器500拒绝）
+    // APP 内页面源是 cocoapp://local/（file:// 同理），用 fetch 打 https 属于跨源不透明请求，
+    // WebKit 会直接拦掉且不返回错误 → 回调永远不来。所以 APP 内必须先走原生通道。
+    var inApp = location.protocol === 'cocoapp:' || location.protocol === 'file:';
+    if ((inApp || !window.fetch) && window.AndroidBridge && AndroidBridge.request) {
+      var cbId0 = 'nb_' + (++Coco._seq);
+      var done0 = false;
+      var timer0 = setTimeout(function () {
+        if (done0) return; done0 = true;
+        delete Coco._nbcbs[cbId0]; cb && cb(new Error('timeout'));
+      }, 10000);
+      Coco._nbcbs[cbId0] = function (err, d) {
+        done0 = true; clearTimeout(timer0);
+        if (err) { cb && cb(err); return; }
+        var text = d && d.__raw !== undefined ? d.__raw : (typeof d === 'string' ? d : JSON.stringify(d || ''));
+        cb && cb(null, text || '');
+      };
+      try { AndroidBridge.request(url, cbId0); }
+      catch (e) { clearTimeout(timer0); delete Coco._nbcbs[cbId0]; cb && cb(e); }
+      return;
+    }
     if (window.fetch) {
-      fetch(url, { credentials: 'include' })
+      var aborted = false;
+      var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      var t0 = setTimeout(function () { aborted = true; if (ctrl) { try { ctrl.abort(); } catch (e) {} } }, 10000);
+      fetch(url, ctrl ? { credentials: 'include', signal: ctrl.signal } : { credentials: 'include' })
         .then(function (r) { return r.text(); })
-        .then(function (t) { cb && cb(null, t); })
-        .catch(function (e) { cb && cb(e); });
+        .then(function (t) { clearTimeout(t0); cb && cb(null, t); })
+        .catch(function (e) { clearTimeout(t0); cb && cb(e); });
       return;
     }
     if (window.AndroidBridge && AndroidBridge.request) {
@@ -279,26 +301,27 @@ var Coco = {
         var id = String(c.type_id);
         return !topIds[id] && !subIds[id];
       });
-      if (extra.length) {
-        var doneCnt = 0;
-        extra.forEach(function (c) {
-          Coco.loadSubs(c.type_id, function (subs) {
-            doneCnt++;
-            if (subs && subs.length) {
-              tops.push({ type_id: c.type_id, type_name: c.type_name, subs: subs });
-            }
-            if (doneCnt >= extra.length) {
-              Coco.classes = tops;
-              try { localStorage.setItem(CACHE_KEY, JSON.stringify({ t: Date.now(), tops: tops })); } catch (e2) {}
-              cb && cb(tops);
-            }
-          });
+      // 先渲染再探测：任何一个补充探测卡住，都不能拖住整页渲染
+      Coco.classes = tops;
+      try { localStorage.setItem(CACHE_KEY, JSON.stringify({ t: Date.now(), tops: tops })); } catch (e2) {}
+      cb && cb(tops);
+      if (!extra.length) return;
+      // 后台探测：有新顶级就热更新，不阻塞首屏
+      var pending = extra.length, changed = false;
+      extra.forEach(function (c) {
+        Coco.loadSubs(c.type_id, function (subs) {
+          pending--;
+          if (subs && subs.length) {
+            var dup = tops.some(function (t) { return String(t.type_id) === String(c.type_id); });
+            if (!dup) { tops.push({ type_id: c.type_id, type_name: c.type_name, subs: subs }); changed = true; }
+          }
+          if (pending <= 0 && changed) {
+            Coco.classes = tops;
+            try { localStorage.setItem(CACHE_KEY, JSON.stringify({ t: Date.now(), tops: tops })); } catch (e3) {}
+            try { if (typeof Coco.onClassesLate === 'function') Coco.onClassesLate(tops); } catch (e4) {}
+          }
         });
-      } else {
-        Coco.classes = tops;
-        try { localStorage.setItem(CACHE_KEY, JSON.stringify({ t: Date.now(), tops: tops })); } catch (e2) {}
-        cb && cb(tops);
-      }
+      });
     });
   },
   /* ---------- 二级分类（解析频道页，API不返回层级） ---------- */

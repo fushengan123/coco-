@@ -11,6 +11,8 @@
 <!-- 播放器 -->
 <div class="player-box" id="playerBox">
   <video id="video" controls playsinline webkit-playsinline x5-playsinline controlslist="nodownload"></video>
+  <!-- 全屏按钮：iOS 用原生全屏播放器，安卓/浏览器用 Fullscreen API -->
+  <div class="fs-btn" id="btnFull">⛶</div>
   <!-- 投屏状态遮罩：投屏后暂停本地播放，点击可恢复手机播放 -->
   <div id="castMask" style="display:none;position:absolute;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,.82);color:#f5c518;flex-direction:column;align-items:center;justify-content:center;text-align:center;z-index:9;">
     <div style="font-size:30px;">📺</div>
@@ -461,9 +463,31 @@ document.getElementById('btnCast').onclick = function () {
   // 投屏后暂停手机本地播放，显示"正在投屏"遮罩
   try { video.pause(); } catch (e) {}
   var mask = document.getElementById('castMask');
-  document.getElementById('castMaskText').textContent = '正在投屏到电视：' + (VOD ? VOD.vod_name : '');
+  document.getElementById('castMaskText').textContent = '正在搜索电视：' + (VOD ? VOD.vod_name : '');
   mask.style.display = 'flex';
   Native.cast(curUrl, VOD ? VOD.vod_name : '');
+};
+// 原生投屏结果回传：成功保持遮罩，失败自动收回并恢复本地播放
+window.__cocoCastResult = function (ok, msg) {
+  var mask = document.getElementById('castMask');
+  var txt = document.getElementById('castMaskText');
+  if (ok) { if (txt && msg) txt.textContent = msg; return; }
+  mask.style.display = 'none';
+  Coco.toast(msg || '投屏失败');
+  try { document.getElementById('video').play(); } catch (e) {}
+};
+// 全屏：iOS 只能走 video.webkitEnterFullscreen()，WKWebView 不支持 Fullscreen API
+document.getElementById('btnFull').onclick = function () {
+  var v = document.getElementById('video');
+  if (!v) return;
+  try { v.play(); } catch (e) {}
+  if (typeof v.webkitEnterFullscreen === 'function') { v.webkitEnterFullscreen(); return; }
+  if (typeof v.webkitEnterFullScreen === 'function') { v.webkitEnterFullScreen(); return; }
+  var pb = document.getElementById('playerBox');
+  if (pb && typeof pb.webkitRequestFullscreen === 'function') { pb.webkitRequestFullscreen(); return; }
+  if (typeof v.requestFullscreen === 'function') { v.requestFullscreen().catch(function () { Coco.toast('当前环境不支持全屏'); }); return; }
+  if (window.AndroidBridge && AndroidBridge.fullscreen) { AndroidBridge.fullscreen(); return; }
+  Coco.toast('当前环境不支持全屏');
 };
 // 点击遮罩：退出投屏状态，恢复手机本地播放
 document.getElementById('castMask').onclick = function () {
