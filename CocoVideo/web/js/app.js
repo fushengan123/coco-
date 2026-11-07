@@ -584,7 +584,10 @@ var Coco = {
       var m = /[?&]id=(\d+)/.exec(link.getAttribute('href') || '');
       if (!m || !map[m[1]]) return;
       var next = Coco.pic(map[m[1]]);
-      if (img.getAttribute('data-src') !== next) img.setAttribute('data-src', next);
+      if (img.getAttribute('data-src') !== next) {
+        img.setAttribute('data-src', next);
+        img.removeAttribute('data-nbf');   // 地址换了，允许重新走一次加载
+      }
     });
     Coco.imgLazy(document);
   },
@@ -604,22 +607,47 @@ var Coco = {
   /* ---------- 图片懒加载（IO + 轮询兜底，保证任何环境都出图） ---------- */
   _lazyObs: null,
   _lazyTimer: null,
+  /* ---------- 图片加载 ----------
+     iOS 上 WebKit 直接拉图经常失败（图片站证书链不全 / 防盗链 / UA 判定），
+     所以 cocoapp 协议下统一走原生取图，取回 base64 再由原生缓存。
+     安卓是 file://，直接拉图本来就没问题，保持原样。 */
+  _useNativeImg: function () {
+    return location.protocol === 'cocoapp:' && !!(window.AndroidBridge && AndroidBridge.img);
+  },
+  loadImg: function (img) {
+    if (!img) return;
+    var ds = img.getAttribute('data-src');
+    if (!ds) return;
+    if (img.getAttribute('data-nbf') === '1') return;
+    if (ds.indexOf('data:') === 0) return;      // 占位图，等真地址回填
+    img.setAttribute('data-nbf', '1');
+    if (!Coco._useNativeImg()) { img.src = ds; return; }
+    var cbId = 'im_' + (++Coco._seq);
+    Coco._nbcbs[cbId] = function (err, uri) {
+      if (!err && uri) { img.src = uri; return; }
+      img.setAttribute('data-nbf', '0');        // 原生也拿不到就退回直连
+      img.src = ds;
+    };
+    try { AndroidBridge.img(ds, cbId); }
+    catch (e) {
+      delete Coco._nbcbs[cbId];
+      img.setAttribute('data-nbf', '0');
+      img.src = ds;
+    }
+  },
   imgLazy: function (root) {
     var imgs = (root || document).querySelectorAll('img[data-src]');
     if (!imgs.length) return;
     if (!('IntersectionObserver' in window)) {
-      imgs.forEach(function (img) { img.src = img.getAttribute('data-src'); });
+      imgs.forEach(function (img) { Coco.loadImg(img); });
       return;
     }
     if (!Coco._lazyObs) {
       Coco._lazyObs = new IntersectionObserver(function (entries) {
         entries.forEach(function (en) {
           if (en.isIntersecting) {
-            var img = en.target;
-            var ds = img.getAttribute('data-src');
-            // data-nbf=1 表示已由原生代理取到图，别再覆盖回原始地址
-            if (ds && img.getAttribute('data-nbf') !== '1' && img.getAttribute('src') !== ds) img.src = ds;
-            Coco._lazyObs.unobserve(img);
+            Coco.loadImg(en.target);
+            Coco._lazyObs.unobserve(en.target);
           }
         });
       }, { rootMargin: '300px 0px' });
@@ -633,10 +661,10 @@ var Coco = {
         var all = true;
         list.forEach(function (img) {
           var ds = img.getAttribute('data-src');
-          if (img.getAttribute('data-nbf') === '1') return;
-          if (img.getAttribute('src') === ds) return;
+          if (!ds) return;
+          if (img.getAttribute('data-nbf') === '1' || img.getAttribute('src') === ds) return;
           var r = img.getBoundingClientRect();
-          if (r.top < vh + 400 && r.bottom > -120) { img.src = ds; }
+          if (r.top < vh + 400 && r.bottom > -120) { Coco.loadImg(img); }
           else { all = false; }
         });
         if (!list.length || all) { clearInterval(Coco._lazyTimer); Coco._lazyTimer = null; }
