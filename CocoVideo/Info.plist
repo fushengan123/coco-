@@ -39,7 +39,7 @@
 		<true/>
 		<key>NSExceptionDomains</key>
 		<dict>
-			<key>8588.eu.org</key>
+			<key>dutv.eu.org</key>
 			<dict>
 				<key>NSExceptionAllowsInsecureHTTPLoads</key>
 				<true/>
