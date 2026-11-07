@@ -1,4 +1,0 @@
-name: probe
-on: workflow_dispatch
-jobs:/n  t:/n    runs-on: ubuntu-latest
-    steps:/n      - run: uname -a
