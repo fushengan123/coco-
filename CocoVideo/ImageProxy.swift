@@ -78,19 +78,36 @@ final class ImageProxy {
     private func fetch(_ url: URL, completion: @escaping (Data?, String) -> Void) {
         var request = URLRequest(url: url)
         request.setValue(Config.mobileUserAgent, forHTTPHeaderField: "User-Agent")
-        request.setValue("\(url.scheme ?? "https")://\(url.host ?? "")/", forHTTPHeaderField: "Referer")
+        request.setValue(Config.site + "/", forHTTPHeaderField: "Referer")
         request.setValue("image/webp,image/apng,image/*,*/*;q=0.8", forHTTPHeaderField: "Accept")
 
         session.dataTask(with: request) { data, response, error in
+            // 状态码必须 2xx：很多站会拿 200 的 HTML 错误页糊弄，那是解不成图的
             guard error == nil,
+                  let http = response as? HTTPURLResponse,
+                  (200..<300).contains(http.statusCode),
                   let data = data,
                   !data.isEmpty,
-                  data.count <= 8_000_000 else {
+                  data.count <= 8_000_000,
+                  Self.looksLikeImage(data) else {
                 completion(nil, "image/jpeg")
                 return
             }
             completion(data, Self.mimeType(response: response, data: data))
         }.resume()
+    }
+
+    /// 只接受真图片，避免把 HTML/JSON 错误页当图片喂给 WebKit（会显示成破图/问号）
+    static func looksLikeImage(_ data: Data) -> Bool {
+        let b = [UInt8](data.prefix(12))
+        if b.count < 4 { return false }
+        if b[0] == 0xFF, b[1] == 0xD8 { return true }                       // jpeg
+        if b[0] == 0x89, b[1] == 0x50, b[2] == 0x4E, b[3] == 0x47 { return true } // png
+        if b[0] == 0x47, b[1] == 0x49, b[2] == 0x46 { return true }        // gif
+        if b.count >= 12, b[0] == 0x52, b[1] == 0x49, b[8] == 0x57 { return true } // webp
+        if b[0] == 0x42, b[1] == 0x4D { return true }                      // bmp
+        if b.count >= 12, b[4] == 0x66, b[5] == 0x74, b[6] == 0x79, b[7] == 0x70 { return true } // heic
+        return false
     }
 
     static func mimeType(response: URLResponse?, data: Data) -> String {

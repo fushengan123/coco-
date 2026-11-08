@@ -629,8 +629,10 @@ var Coco = {
         try { AndroidBridge.img(ds, cbId); } catch (e) { delete Coco._nbcbs[cbId]; next(); }
         return;
       }
+      if (step === 3) { img.src = ds; return; }
+      // 三层全挂：退回占位块，别留一个问号在那儿
       img.onerror = null;
-      img.src = ds;
+      img.src = Coco.placeholder(160, 220);
     }
     img.onerror = next;
     next();
