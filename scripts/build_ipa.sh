@@ -71,6 +71,17 @@ cd "$OUT_DIR"
 zip -qry "$OUT_NAME" Payload
 cd ..
 
+# 打包后自检：确认 IPA 里的标识/站点/名字确实是本次传入的值
+echo ">> 自检 ($OUT_DIR/$OUT_NAME)"
+CHECK_DIR="$OUT_DIR/_check"
+rm -rf "$CHECK_DIR"; mkdir -p "$CHECK_DIR"
+unzip -qo "$OUT_DIR/$OUT_NAME" -d "$CHECK_DIR"
+CPL="$CHECK_DIR/Payload/$APP_NAME.app/Info.plist"
+echo "   CFBundleIdentifier = $($PB -c 'Print :CFBundleIdentifier' "$CPL")"
+echo "   CFBundleDisplayName = $($PB -c 'Print :CFBundleDisplayName' "$CPL")"
+echo "   CocoSite = $($PB -c 'Print :CocoSite' "$CPL")"
+rm -rf "$CHECK_DIR"
+
 echo "OK -> $(pwd)/$OUT_DIR/$OUT_NAME"
 ls -lh "$OUT_DIR/$OUT_NAME"
 
