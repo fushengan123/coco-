@@ -5,10 +5,13 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: macos-15
-    timeout-minutes: 30
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
 
@@ -18,15 +21,26 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
 
-      - name: Generate project
-        run: xcodegen generate
+      - name: Build v1 (dutv)
+        run: bash scripts/build_ipa.sh 1.7.0 https://dutv.eu.org 开心视频 com.coco.video 开心视频_v1.7.0_ios.ipa 2>&1 | tee build_log.txt
 
-      - name: Build unsigned IPA
-        run: bash scripts/build_ipa.sh 1.7.0
+      - name: Build v2 (191314)
+        run: bash scripts/build_ipa.sh 1.7.0 https://191314.best 开心视频2 com.coco.video2 开心视频2_v1.7.0_ios.ipa 2>&1 | tee -a build_log.txt
 
       - name: Upload IPA
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: COCO-iOS-ipa
+          name: kxsp-ipa
           path: build/*.ipa
-          if-no-files-found: error
+          if-no-files-found: warn
+
+      - name: Commit build log on failure
+        if: failure()
+        run: |
+          cp build_log.txt ci-last-build.log 2>/dev/null || true
+          git config user.name "coco-ci"
+          git config user.email "coco-ci@users.noreply.github.com"
+          git add -f ci-last-build.log
+          git commit -m "ci: capture build log [skip ci]" || true
+          git push
