@@ -6,6 +6,15 @@ import WebKit
 /// 原生播放器：把 AVPlayerViewController 嵌在 H5 的播放器区域上方。
 /// 控制条、拖动、AirPlay、画中画、全屏全部用系统原生的那套，
 /// H5 只负责选集、进度记忆、片头片尾跳过逻辑。
+/// 全屏播放器：关掉时把内嵌那块恢复回来
+final class FullscreenPlayerVC: AVPlayerViewController {
+    var onClose: (() -> Void)?
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        if isBeingDismissed { onClose?() }
+    }
+}
+
 final class NativePlayer: NSObject {
 
     private weak var parent: UIViewController?
@@ -20,6 +29,9 @@ final class NativePlayer: NSObject {
 
     /// 左上角返回键（44pt，压在播放器之上）
     private let backButton = UIButton(type: .system)
+    /// 右下角全屏键
+    private let fullscreenButton = UIButton(type: .system)
+    private var fullscreenVC: FullscreenPlayerVC?
 
     /// H5 传来的原始布局（CSS 像素），转屏后按新的视口重新换算
     private var cssRect: CGRect = .zero
@@ -62,6 +74,16 @@ final class NativePlayer: NSObject {
             backButton.layer.cornerRadius = 22
             backButton.addTarget(self, action: #selector(onBack), for: .touchUpInside)
             box.addSubview(backButton)
+
+            fullscreenButton.frame = CGRect(x: box.bounds.width - 52, y: box.bounds.height - 52, width: 44, height: 44)
+            fullscreenButton.autoresizingMask = [.flexibleLeftMargin, .flexibleTopMargin]
+            fullscreenButton.setTitle("⤢", for: .normal)
+            fullscreenButton.setTitleColor(.white, for: .normal)
+            fullscreenButton.titleLabel?.font = UIFont.systemFont(ofSize: 22, weight: .semibold)
+            fullscreenButton.backgroundColor = UIColor(white: 0, alpha: 0.4)
+            fullscreenButton.layer.cornerRadius = 22
+            fullscreenButton.addTarget(self, action: #selector(onFullscreen), for: .touchUpInside)
+            box.addSubview(fullscreenButton)
         } else {
             container?.frame = layoutFrame(in: host)
             playerVC.view.frame = container?.bounds ?? .zero
@@ -82,6 +104,11 @@ final class NativePlayer: NSObject {
             playerVC.removeFromParent()
         }
         backButton.removeFromSuperview()
+        fullscreenButton.removeFromSuperview()
+        if let fs = fullscreenVC {
+            fs.dismiss(animated: false, completion: nil)
+            fullscreenVC = nil
+        }
         container?.removeFromSuperview()
         container = nil
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
@@ -184,6 +211,23 @@ final class NativePlayer: NSObject {
             let err = (note.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error)?.localizedDescription
             self?.send("window.__cocoPlayerError&&window.__cocoPlayerError(\(JSUtil.quote(err ?? "无法播放该片源")));")
         }
+    }
+
+    @objc private func onFullscreen() {
+        guard let parent = parent, let player = player, fullscreenVC == nil else { return }
+        let fs = FullscreenPlayerVC()
+        fs.player = player
+        fs.showsPlaybackControls = true
+        fs.videoGravity = .resizeAspect
+        fs.updatesNowPlayingInfoCenter = false
+        fs.modalPresentationStyle = .fullScreen
+        fs.onClose = { [weak self] in
+            self?.playerVC.view.isHidden = false
+            self?.fullscreenVC = nil
+        }
+        playerVC.view.isHidden = true
+        fullscreenVC = fs
+        parent.present(fs, animated: true, completion: nil)
     }
 
     @objc private func onBack() {
