@@ -11,7 +11,7 @@
 <div class="mine-banner">
   <div class="mine-avatar" id="avatarBox">🎬</div>
   <div style="flex:1;min-width:0;">
-    <div class="mine-login-name" id="loginName">开心影迷</div>
+    <div class="mine-login-name" id="loginName">开心视频影迷</div>
     <div class="mine-login-sub" id="loginSub">点击登录网站会员</div>
     <div class="mine-vip" id="vipBar" style="display:none;margin-top:6px;">
       <span class="vip-tag" id="vipTag">会员</span>
@@ -84,7 +84,7 @@ function renderUser() {
       Coco.logout(function () { Coco.toast('已退出登录'); renderUser(); });
     };
   } else {
-    name.textContent = '开心影迷';
+    name.textContent = Coco.brand + '影迷';
     sub.textContent = '点击登录网站会员';
     vip.style.display = 'none';
     btn.style.display = 'block';
@@ -102,7 +102,7 @@ document.getElementById('loginSub').onclick = function () {
   if (u) location.href = 'member.html'; else location.href = 'login.html';
 };
 document.getElementById('feedback').onclick = function () { location.href = 'feedback.html'; };
-document.getElementById('shareApp').onclick = function () { Native.share('开心视频'); };
+document.getElementById('shareApp').onclick = function () { Native.share(Coco.brand); };
 document.getElementById('castHelp').onclick = function () { Coco.toast('确保手机和电视连同一WiFi，播放页点电视投屏'); };
 // 线路切换：两台站点轮换
 (function bindSwitch() {
@@ -125,7 +125,7 @@ document.getElementById('clearCache').onclick = function () {
   Coco.toast('缓存已清除');
 };
 document.getElementById('about').onclick = function () {
-  Coco.toast('开心视频 v1.7.0\n数据来源：' + SITE);
+  Coco.toast(Coco.brand + ' v1.7.0\n数据来源：' + SITE);
 };
 renderUser();
 </script>

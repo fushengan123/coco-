@@ -20,7 +20,12 @@ enum Config {
     /// 双站：APP 内可切换（存在 localStorage，H5 侧生效）
     static let sites = ["https://dutv.eu.org", "https://191314.best"]
 
-    static let brandName = "开心视频"
+    /// 品牌名 = 打包时写入的 CFBundleDisplayName（Coco / 开心视频 各一份）
+    static let brandName: String = {
+        let raw = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
+        let value = (raw?.isEmpty == false ? raw! : "开心视频")
+        return value
+    }()
 
     /// 原生通道与 WebView 共用同一个移动端 UA
     static let mobileUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1"
@@ -42,6 +47,7 @@ enum Config {
     static let bridgeScript = #"""
     (function () {
       window.__COCO_SITE = '\#(Config.site)';
+      window.__COCO_BRAND = '\#(Config.brandName)';
       if (window.AndroidBridge) { return; }
       var h = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.coco;
       if (!h) { return; }
@@ -107,6 +113,32 @@ enum Config {
           setTimeout(measureInsets, 320);
         });
         window.addEventListener('resize', measureInsets);
+
+        // 品牌字跟着包走：Coco 包里所有"开心视频"换成 Coco
+        function applyBrand() {
+          var b = window.__COCO_BRAND;
+          if (!b || b === '开心视频') return;
+          try {
+            if (document.title) document.title = document.title.split('开心视频').join(b);
+            var metas = document.querySelectorAll('meta[content*="开心视频"]');
+            for (var i = 0; i < metas.length; i++) {
+              metas[i].setAttribute('content', metas[i].getAttribute('content').split('开心视频').join(b));
+            }
+            var root = document.body || document.documentElement;
+            if (!root) return;
+            var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null, false);
+            var n, hits = [];
+            while ((n = walker.nextNode())) {
+              if (n.nodeValue && n.nodeValue.indexOf('开心视频') >= 0) hits.push(n);
+            }
+            for (var j = 0; j < hits.length; j++) {
+              hits[j].nodeValue = hits[j].nodeValue.split('开心视频').join(b);
+            }
+          } catch (e) { }
+        }
+        applyBrand();
+        document.addEventListener('DOMContentLoaded', applyBrand);
+        window.addEventListener('load', function () { applyBrand(); setTimeout(applyBrand, 600); });
 
         // 输入框聚焦时 iOS 会把它顶到屏幕最上方，正好钻进灵动岛下面。
         // 键盘弹出后再校一次位置，保证光标始终在安全区内。

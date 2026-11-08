@@ -10,6 +10,8 @@ try { _site = localStorage.getItem('coco_site') || ''; } catch (e) { }
 if (_fixed) _site = _fixed;
 else if (SITE_LIST.indexOf(_site) < 0) _site = SITE_LIST[0];
 // 网页版（http/https 同源）用相对地址；APP 内用绝对地址
+// 品牌名由原生注入（Coco / 开心视频），网页版默认开心视频
+var BRAND = (typeof window !== 'undefined' && window.__COCO_BRAND) ? String(window.__COCO_BRAND) : '开心视频';
 var SITE = (location.protocol === 'http:' || location.protocol === 'https:') ? '' : _site;
 var API = SITE + '/api.php/provide/vod/';
 
@@ -21,6 +23,7 @@ var Coco = {
   // 原生通道回调（Android OkHttp请求后回传）
   /* ---------- 站点切换 ---------- */
   fixedSite: !!_fixed,
+  brand: BRAND,
   siteList: SITE_LIST,
   siteNames: SITE_NAMES,
   currentSite: function () { return _site; },
