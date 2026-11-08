@@ -5,10 +5,10 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-VERSION="${1:-1.6.0}"
+VERSION="${1:-1.7.0}"
 APP_NAME="CocoVideo"
 OUT_DIR="build"
-IPA_NAME="COCO影视_v${VERSION}_ios.ipa"
+IPA_NAME="开心视频_v${VERSION}_ios.ipa"
 
 if command -v xcodegen >/dev/null 2>&1; then
   echo ">> xcodegen: 用 project.yml 重建工程"
@@ -20,20 +20,10 @@ fi
 rm -rf "$OUT_DIR"
 mkdir -p "$OUT_DIR"
 
-# xcodegen 只有显式声明 scheme 才会生成 shared scheme；
-# 没生成就退回 -target，否则 xcodebuild 直接报 "does not contain a scheme"
-if xcodebuild -project CocoVideo.xcodeproj -list 2>/dev/null | sed -n '/Schemes:/,$p' | grep -qw "$APP_NAME"; then
-  echo ">> 用 scheme: $APP_NAME"
-  TARGET_ARGS=(-scheme "$APP_NAME")
-else
-  echo ">> 没找到 scheme，退回 target: $APP_NAME"
-  TARGET_ARGS=(-target "$APP_NAME")
-fi
-
 echo ">> archive (未签名)"
 xcodebuild \
   -project CocoVideo.xcodeproj \
-  "${TARGET_ARGS[@]}" \
+  -scheme "$APP_NAME" \
   -configuration Release \
   -sdk iphoneos \
   -destination 'generic/platform=iOS' \
@@ -59,8 +49,3 @@ cd ..
 echo ""
 echo "OK -> $(pwd)/$OUT_DIR/$IPA_NAME"
 ls -lh "$OUT_DIR/$IPA_NAME"
-
-# 发布：把 IPA 挂到 GitHub Release，公开仓库里匿名可下载
-if [ -f "scripts/publish_ipa.sh" ]; then
-  bash scripts/publish_ipa.sh "$OUT_DIR/$IPA_NAME" || echo "PUBLISH: skipped"
-fi

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>我的 - COCO影视</title>
+<title>我的 - 开心视频</title>
 <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
@@ -11,7 +11,7 @@
 <div class="mine-banner">
   <div class="mine-avatar" id="avatarBox">🎬</div>
   <div style="flex:1;min-width:0;">
-    <div class="mine-login-name" id="loginName">COCO 影迷</div>
+    <div class="mine-login-name" id="loginName">开心影迷</div>
     <div class="mine-login-sub" id="loginSub">点击登录网站会员</div>
     <div class="mine-vip" id="vipBar" style="display:none;margin-top:6px;">
       <span class="vip-tag" id="vipTag">会员</span>
@@ -37,12 +37,13 @@
 
 <!-- 其他 -->
 <div class="mine-list">
+  <a class="mine-row" id="switchLine"><span class="mr-ico">🔀</span>切换线路<span class="mr-arrow" id="lineName">›</span></a>
   <a class="mine-row" id="feedback"><span class="mr-ico">💬</span>反馈 / 求片<span class="mr-arrow">›</span></a>
   <a class="mine-row" id="clearCache"><span class="mr-ico">🧹</span>清除缓存<span class="mr-arrow">›</span></a>
   <a class="mine-row" id="about"><span class="mr-ico">ℹ️</span>关于我们<span class="mr-arrow">›</span></a>
 </div>
 
-<div style="text-align:center;color:var(--txt3);font-size:12px;margin-top:24px;">COCO 影视 v1.1.0</div>
+<div style="text-align:center;color:var(--txt3);font-size:12px;margin-top:24px;">开心视频 v1.7.0</div>
 
 <div class="tabbar">
   <a href="index.html"><span class="t-ico">🏠</span>首页</a>
@@ -83,7 +84,7 @@ function renderUser() {
       Coco.logout(function () { Coco.toast('已退出登录'); renderUser(); });
     };
   } else {
-    name.textContent = 'COCO 影迷';
+    name.textContent = '开心影迷';
     sub.textContent = '点击登录网站会员';
     vip.style.display = 'none';
     btn.style.display = 'block';
@@ -101,14 +102,28 @@ document.getElementById('loginSub').onclick = function () {
   if (u) location.href = 'member.html'; else location.href = 'login.html';
 };
 document.getElementById('feedback').onclick = function () { location.href = 'feedback.html'; };
-document.getElementById('shareApp').onclick = function () { Native.share('COCO影视'); };
+document.getElementById('shareApp').onclick = function () { Native.share('开心视频'); };
 document.getElementById('castHelp').onclick = function () { Coco.toast('确保手机和电视连同一WiFi，播放页点电视投屏'); };
+// 线路切换：两台站点轮换
+(function bindSwitch() {
+  var row = document.getElementById('switchLine');
+  var label = document.getElementById('lineName');
+  var cur = Coco.currentSite();
+  var idx = Math.max(0, Coco.siteList.indexOf(cur));
+  if (label) label.textContent = Coco.siteNames[idx] + ' ›';
+  row.onclick = function () {
+    var next = Coco.siteList[(idx + 1) % Coco.siteList.length];
+    Coco.toast('切换到 ' + Coco.siteNames[(idx + 1) % Coco.siteList.length]);
+    setTimeout(function () { Coco.switchSite(next); }, 300);
+  };
+})();
+
 document.getElementById('clearCache').onclick = function () {
   localStorage.removeItem('coco_classes');
   Coco.toast('缓存已清除');
 };
 document.getElementById('about').onclick = function () {
-  Coco.toast('COCO影视 v1.1.0\n数据来源：' + SITE);
+  Coco.toast('开心视频 v1.7.0\n数据来源：' + SITE);
 };
 renderUser();
 </script>

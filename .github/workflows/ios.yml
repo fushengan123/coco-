@@ -22,7 +22,7 @@ jobs:
         run: xcodegen generate
 
       - name: Build unsigned IPA
-        run: bash scripts/build_ipa.sh 1.6.0
+        run: bash scripts/build_ipa.sh 1.7.0
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4

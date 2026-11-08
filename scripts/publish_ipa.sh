@@ -7,7 +7,7 @@ IPA="$1"
 if [ ! -f "$IPA" ]; then echo "PUBLISH: ipa not found: $IPA"; exit 0; fi
 
 REPO="${GITHUB_REPOSITORY:-fushengan123/coco-}"
-TAG="v1.6.0"
+TAG="v1.7.0"
 NAME=$(basename "$IPA")
 echo "PUBLISH: $NAME ($(wc -c < "$IPA" | tr -d ' ') bytes) -> $REPO $TAG"
 
@@ -39,7 +39,7 @@ if [ -n "$OLD" ]; then
 fi
 
 RESP=$(curl -s -X POST -H "$AUTH" -H "Content-Type: application/json" \
-  -d "{\"tag_name\":\"$TAG\",\"name\":\"COCO iOS 1.6.0\",\"body\":\"Unsigned IPA, built on macos-14 by GitHub Actions. Sideload with Sideloadly.\"}" \
+  -d "{\"tag_name\":\"$TAG\",\"name\":\"开心视频 iOS 1.7.0\",\"body\":\"Unsigned IPA, built on macos-14 by GitHub Actions. Sideload with Sideloadly.\"}" \
   "$API/releases")
 REL_ID=$(printf '%s' "$RESP" | python3 -c "import json,sys
 try:

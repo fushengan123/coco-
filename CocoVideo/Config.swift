@@ -10,9 +10,12 @@ enum Config {
     static let startPage = "index.html"
 
     /// 站点（与 H5 里 SITE 保持一致）
-    static let site = "https://191314.best"
+    static let site = "https://dutv.eu.org"
 
-    static let brandName = "COCO影视"
+    /// 双站：APP 内可切换（存在 localStorage，H5 侧生效）
+    static let sites = ["https://dutv.eu.org", "https://191314.best"]
+
+    static let brandName = "开心视频"
 
     /// 原生通道与 WebView 共用同一个移动端 UA
     static let mobileUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1"

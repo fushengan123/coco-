@@ -1,6 +1,13 @@
-/* ========== COCO APP 核心库 ========== */
+/* ========== 开心视频 APP 核心库 ========== */
 // 站点地址：APP内（file://）用绝对地址；网页版（http/https 同源）用相对地址
-var SITE = (location.protocol === 'http:' || location.protocol === 'https:') ? '' : 'https://191314.best';
+/* ========== 双站 ========== */
+var SITE_LIST = ['https://dutv.eu.org', 'https://191314.best'];
+var SITE_NAMES = ['主线路', '备用线路'];
+var _site = '';
+try { _site = localStorage.getItem('coco_site') || ''; } catch (e) { }
+if (SITE_LIST.indexOf(_site) < 0) _site = SITE_LIST[0];
+// 网页版（http/https 同源）用相对地址；APP 内用绝对地址
+var SITE = (location.protocol === 'http:' || location.protocol === 'https:') ? '' : _site;
 var API = SITE + '/api.php/provide/vod/';
 
 var Coco = {
@@ -9,6 +16,17 @@ var Coco = {
   _seq: 0,
   _nbcbs: {},
   // 原生通道回调（Android OkHttp请求后回传）
+  /* ---------- 站点切换 ---------- */
+  siteList: SITE_LIST,
+  siteNames: SITE_NAMES,
+  currentSite: function () { return _site; },
+  switchSite: function (url) {
+    if (SITE_LIST.indexOf(url) < 0) return;
+    try { localStorage.setItem('coco_site', url); } catch (e) { }
+    // 分类缓存按站点隔离，切站后清一下旧键
+    try { localStorage.removeItem('coco_classes_v8_' + _site); } catch (e) { }
+    location.href = 'index.html';
+  },
   _nativeResp: function (cbId, text, err) {
     var cb = Coco._nbcbs[cbId];
     if (!cb) return;
@@ -264,7 +282,7 @@ var Coco = {
   },
   /* ---------- 获取顶级分类（探测频道页子导航，服务器API无type_pid层级） ---------- */
   loadClasses: function (cb) {
-    var CACHE_KEY = 'coco_classes_v7';
+    var CACHE_KEY = 'coco_classes_v8_' + _site;
     if (Coco.classes.length) { cb && cb(Coco.classes); return; }
     try {
       var c = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
@@ -357,7 +375,7 @@ var Coco = {
     if (typeof t === 'object' && t !== null) { opt = t; }
     else { if (t) opt.t = t; opt.pg = pg || 1; }
     // 本地缓存（30分钟有效）：命中直接秒开，跳过补封面
-    var key = 'coco_l_v2_' + (opt.t || '') + '_' + (opt.pg || 1) + '_' + (opt.wd || '') + '_' + (opt.ac || '') + '_' + (opt.class || '');
+    var key = 'coco_l_v2_' + _site + '_' + (opt.t || '') + '_' + (opt.pg || 1) + '_' + (opt.wd || '') + '_' + (opt.ac || '') + '_' + (opt.class || '');
     var hit = null;
     try { hit = JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) {}
     if (hit && hit.d && hit.d.list && hit.d.list.length && (Date.now() - hit.t < 1800000)) {
@@ -404,7 +422,7 @@ var Coco = {
   /* ---------- 搜索 ---------- */
   search: function (wd, pg, cb) {
     // 搜索缓存（30分钟有效）
-    var key = 'coco_s_v2_' + wd + '_' + (pg || 1), hit = null;
+    var key = 'coco_s_v2_' + _site + '_' + wd + '_' + (pg || 1), hit = null;
     try { hit = JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) {}
     if (hit && hit.d && hit.d.list && hit.d.list.length && (Date.now() - hit.t < 1800000)) { cb && cb(null, hit.d); return; }
     Coco.jsonp({ wd: wd, pg: pg || 1 }, function (err, d) {

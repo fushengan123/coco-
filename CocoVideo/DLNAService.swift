@@ -229,7 +229,7 @@ final class DLNAService {
             + " xmlns:dc=\"http://purl.org/dc/elements/1.1/\""
             + " xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\">"
             + "<item id=\"1\" parentID=\"0\" restricted=\"1\">"
-            + "<dc:title>\(escape(title.isEmpty ? "COCO影视" : title))</dc:title>"
+            + "<dc:title>\(escape(title.isEmpty ? "开心视频" : title))</dc:title>"
             + "<upnp:class>object.item.videoItem</upnp:class>"
             + "<res protocolInfo=\"http-get:*:\(mime):*\">\(escape(media.absoluteString))</res>"
             + "</item></DIDL-Lite>"
