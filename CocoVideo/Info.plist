@@ -4,6 +4,8 @@
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>zh_CN</string>
+	<key>CocoSite</key>
+	<string>https://dutv.eu.org</string>
 	<key>CFBundleDisplayName</key>
 	<string>开心视频</string>
 	<key>CFBundleExecutable</key>

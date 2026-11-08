@@ -108,6 +108,8 @@ document.getElementById('castHelp').onclick = function () { Coco.toast('确保�
 (function bindSwitch() {
   var row = document.getElementById('switchLine');
   var label = document.getElementById('lineName');
+  // 固定站点的包不显示切换入口（两个 App 各绑一站）
+  if (Coco.fixedSite) { if (row) row.style.display = 'none'; return; }
   var cur = Coco.currentSite();
   var idx = Math.max(0, Coco.siteList.indexOf(cur));
   if (label) label.textContent = Coco.siteNames[idx] + ' ›';

@@ -10,7 +10,12 @@ enum Config {
     static let startPage = "index.html"
 
     /// 站点（与 H5 里 SITE 保持一致）
-    static let site = "https://dutv.eu.org"
+    /// 站点由打包时写入 Info.plist 的 CocoSite 决定（一包一站，可同时装两个 App）
+    static let site: String = {
+        let raw = Bundle.main.object(forInfoDictionaryKey: "CocoSite") as? String
+        let value = (raw?.isEmpty == false ? raw! : "https://dutv.eu.org")
+        return value.hasSuffix("/") ? String(value.dropLast()) : value
+    }()
 
     /// 双站：APP 内可切换（存在 localStorage，H5 侧生效）
     static let sites = ["https://dutv.eu.org", "https://191314.best"]
@@ -36,6 +41,7 @@ enum Config {
     /// H5 里的 if (window.AndroidBridge && AndroidBridge.request) 一行都不用改。
     static let bridgeScript = #"""
     (function () {
+      window.__COCO_SITE = '\#(Config.site)';
       if (window.AndroidBridge) { return; }
       var h = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.coco;
       if (!h) { return; }

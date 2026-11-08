@@ -3,9 +3,12 @@
 /* ========== 双站 ========== */
 var SITE_LIST = ['https://dutv.eu.org', 'https://191314.best'];
 var SITE_NAMES = ['主线路', '备用线路'];
+// 原生注入的站点优先级最高：两个 App 各自绑一个站，互不影响
+var _fixed = (typeof window !== 'undefined' && window.__COCO_SITE) ? String(window.__COCO_SITE) : '';
 var _site = '';
 try { _site = localStorage.getItem('coco_site') || ''; } catch (e) { }
-if (SITE_LIST.indexOf(_site) < 0) _site = SITE_LIST[0];
+if (_fixed) _site = _fixed;
+else if (SITE_LIST.indexOf(_site) < 0) _site = SITE_LIST[0];
 // 网页版（http/https 同源）用相对地址；APP 内用绝对地址
 var SITE = (location.protocol === 'http:' || location.protocol === 'https:') ? '' : _site;
 var API = SITE + '/api.php/provide/vod/';
@@ -17,6 +20,7 @@ var Coco = {
   _nbcbs: {},
   // 原生通道回调（Android OkHttp请求后回传）
   /* ---------- 站点切换 ---------- */
+  fixedSite: !!_fixed,
   siteList: SITE_LIST,
   siteNames: SITE_NAMES,
   currentSite: function () { return _site; },
