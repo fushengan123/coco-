@@ -9,6 +9,7 @@ final class WebViewController: UIViewController {
 
     private let bridge = NativeBridge()
     private var observations: [NSKeyValueObservation] = []
+    private var nativePlayer: NativePlayer?
     private var splashDeadline: DispatchWorkItem?
 
     private lazy var webView: WKWebView = makeWebView()
@@ -19,10 +20,16 @@ final class WebViewController: UIViewController {
 
     override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
 
+    /// 允许横屏：浏览页和播放页都跟着系统转
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .allButUpsideDown }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = ink
         buildWebView()
+        let player = NativePlayer(parent: self, webView: webView)
+        nativePlayer = player
+        bridge.player = player
         buildProgress()
         buildSplash()
         buildFailure()
@@ -34,6 +41,7 @@ final class WebViewController: UIViewController {
         observations.forEach { $0.invalidate() }
         webView.configuration.userContentController.removeScriptMessageHandler(forName: NativeBridge.handlerName)
         splashDeadline?.cancel()
+        nativePlayer?.close()
     }
 
     // MARK: - 构建
@@ -200,6 +208,7 @@ final class WebViewController: UIViewController {
     private func loadHome() {
         webView.load(URLRequest(url: Config.homeURL))
         splashDeadline?.cancel()
+        nativePlayer?.close()
         let item = DispatchWorkItem { [weak self] in self?.hideSplash() }
         splashDeadline = item
         DispatchQueue.main.asyncAfter(deadline: .now() + 6, execute: item)

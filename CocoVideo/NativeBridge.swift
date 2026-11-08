@@ -9,6 +9,7 @@ final class NativeBridge: NSObject, WKScriptMessageHandler {
 
     weak var webView: WKWebView?
     weak var host: UIViewController?
+    var player: NativePlayer?
 
     func userContentController(_ userContentController: WKUserContentController,
                                didReceive message: WKScriptMessage) {
@@ -20,6 +21,12 @@ final class NativeBridge: NSObject, WKScriptMessageHandler {
         case "post":    handleRequest(body, form: (body["data"] as? String) ?? "")
         case "cast":    handleCast(body)
         case "img":     handleImage(body)
+        case "playerOpen":   handlePlayerOpen(body)
+        case "playerClose":  player?.close()
+        case "playerPlay":   player?.play()
+        case "playerPause":  player?.pause()
+        case "playerSeek":   handlePlayerSeek(body)
+        case "playerLayout": handlePlayerLayout(body)
         case "share":   handleShare(body)
         case "copy":    handleCopy(body)
         case "openWeb": handleOpenWeb(body)
@@ -42,6 +49,51 @@ final class NativeBridge: NSObject, WKScriptMessageHandler {
                 self?.webView?.evaluateJavaScript(js, completionHandler: nil)
             }
         }
+    }
+
+    // MARK: - 原生播放器
+
+    private static func num(_ any: Any?) -> CGFloat {
+        if let v = any as? CGFloat { return v }
+        if let v = any as? Double { return CGFloat(v) }
+        if let v = any as? Int { return CGFloat(v) }
+        if let v = any as? String, let d = Double(v) { return CGFloat(d) }
+        return 0
+    }
+
+    private func playerArgs(_ body: [String: Any]) -> (URL, CGRect, CGFloat)? {
+        guard let raw = body["json"] as? String,
+              let data = raw.data(using: .utf8),
+              let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              let urlStr = obj["url"] as? String,
+              let url = URL(string: urlStr),
+              let scheme = url.scheme?.lowercased(),
+              scheme == "http" || scheme == "https" else { return nil }
+
+        let rect = CGRect(x: Self.num(obj["x"]), y: Self.num(obj["y"]),
+                          width: Self.num(obj["w"]), height: Self.num(obj["h"]))
+        let iw = Self.num(obj["iw"])
+        return (url, rect, iw > 0 ? iw : 375)
+    }
+
+    private func handlePlayerOpen(_ body: [String: Any]) {
+        guard let (url, rect, iw) = playerArgs(body) else { return }
+        let title = (body["title"] as? String) ?? ""
+        DispatchQueue.main.async { [weak self] in
+            self?.player?.open(url: url, cssRect: rect, cssWidth: iw, title: title)
+        }
+    }
+
+    private func handlePlayerLayout(_ body: [String: Any]) {
+        guard let (_, rect, iw) = playerArgs(body) else { return }
+        DispatchQueue.main.async { [weak self] in
+            self?.player?.relayout(cssRect: rect, cssWidth: iw)
+        }
+    }
+
+    private func handlePlayerSeek(_ body: [String: Any]) {
+        let seconds = Double(Self.num(body["t"]))
+        player?.seek(to: seconds)
     }
 
     // MARK: - 图片代理

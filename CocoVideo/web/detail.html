@@ -10,6 +10,8 @@
 <body>
 <!-- 播放器 -->
 <div class="player-box" id="playerBox">
+  <!-- 返回键：播放页没有顶部栏，单独浮在左上角，避开刘海/灵动岛 -->
+  <div class="back-btn" id="btnBack">‹</div>
   <video id="video" controls playsinline webkit-playsinline x5-playsinline controlslist="nodownload"></video>
   <!-- 全屏按钮：iOS 用原生全屏播放器，安卓/浏览器用 Fullscreen API -->
   <div class="fs-btn" id="btnFull">⛶</div>
@@ -164,31 +166,89 @@ renderPS();
 var _skippedHead = false, _tailFired = false;
 function _resetEpFlags() { _skippedHead = false; _tailFired = false; }
 
+// ===== 播放器抽象 =====
+// iOS：交给原生 AVPlayer（系统控制条 / 画中画 / AirPlay / 全屏都是原生的）
+// 其他：还是 <video> + hls.js
+var HAS_NATIVE_PLAYER = !!(window.AndroidBridge && AndroidBridge.playerOpen);
+var NP = { on: false };
+
+function playerBoxCss() {
+  var b = document.getElementById('playerBox').getBoundingClientRect();
+  return { x: Math.round(b.left), y: Math.round(b.top), w: Math.round(b.width), h: Math.round(b.height), iw: window.innerWidth };
+}
+function npOpen(url) {
+  var r = playerBoxCss();
+  r.url = url;
+  NP.on = true;
+  document.getElementById('video').style.visibility = 'hidden';
+  var fs = document.getElementById('btnFull'); if (fs) fs.style.display = 'none';
+  var bk = document.getElementById('btnBack'); if (bk) bk.style.display = 'none';
+  try { AndroidBridge.playerOpen(JSON.stringify(r)); }
+  catch (e) { NP.on = false; fallbackPlay(url); }
+}
+function npClose() {
+  if (!NP.on) return;
+  NP.on = false;
+  try { AndroidBridge.playerClose(); } catch (e) {}
+  document.getElementById('video').style.visibility = '';
+  var fs = document.getElementById('btnFull'); if (fs) fs.style.display = '';
+  var bk = document.getElementById('btnBack'); if (bk) bk.style.display = '';
+}
+function npSeek(t) { try { AndroidBridge.playerSeek(t); } catch (e) {} }
+function npPause() { try { AndroidBridge.playerPause(); } catch (e) {} }
+function npResume() { try { AndroidBridge.playerPlay(); } catch (e) {} }
+function npRelayout() {
+  if (!NP.on) return;
+  var r = playerBoxCss();
+  r.url = curUrl;
+  try { AndroidBridge.playerLayout(JSON.stringify(r)); } catch (e) {}
+}
+
+// 原生播放器回传
+window.__cocoPlayerTime = function (t, d) { onTick(t, d); };
+window.__cocoPlayerEnded = function () { if (PS.auto) playNext('本集播放完成，自动播放下一集'); };
+window.__cocoPlayerError = function (m) { Coco.toast('播放失败：' + (m || '片源异常') + '，请换线路'); };
+window.__cocoPlayerState = function () { };
+// 原生播放器左上角返回键
+window.__cocoPlayerBack = function () {
+  npClose();
+  if (history.length > 1) { history.back(); } else { location.href = 'index.html'; }
+};
+
+// 片头片尾逻辑：两套播放器共用
+function onTick(t, dur) {
+  if (!isFinite(dur) || dur <= 0) return;
+  if (!_skippedHead && PS.head > 0 && dur > PS.head + PS.tail + 60 && t < PS.head && t >= 0) {
+    _skippedHead = true;
+    seekTo(PS.head);
+    Coco.toast('已跳过片头 ' + PS.head + ' 秒');
+  }
+  if (!_tailFired && PS.auto && PS.tail > 0 && dur > PS.head + PS.tail + 60 && t >= dur - PS.tail) {
+    _tailFired = true;
+    playNext('已到片尾，自动播放下一集');
+  }
+}
+function seekTo(t) {
+  if (NP.on) { npSeek(t); return; }
+  try { document.getElementById('video').currentTime = t; } catch (e) {}
+}
+
 (function bindPlayEvents() {
   var video = document.getElementById('video');
-  // 元数据加载完成：重置本集标记
   video.addEventListener('loadedmetadata', _resetEpFlags);
   video.addEventListener('loadeddata', _resetEpFlags);
-  // 进度监听：跳片头 + 片尾自动连播
   video.addEventListener('timeupdate', function () {
-    var dur = video.duration, t = video.currentTime;
-    if (!isFinite(dur) || dur <= 0) return;
-    // 跳过片头：只在每集刚开始、用户未手动拖动过时触发一次
-    if (!_skippedHead && PS.head > 0 && dur > PS.head + PS.tail + 60 && t < PS.head && t >= 0) {
-      _skippedHead = true;
-      try { video.currentTime = PS.head; } catch (e) {}
-      Coco.toast('已跳过片头 ' + PS.head + ' 秒');
-    }
-    // 跳过片尾：到达距结束 tail 秒处，自动下一集（只触发一次）
-    if (!_tailFired && PS.auto && PS.tail > 0 && dur > PS.head + PS.tail + 60 && t >= dur - PS.tail) {
-      _tailFired = true;
-      playNext('已到片尾，自动播放下一集');
-    }
+    onTick(video.currentTime, video.duration);
   });
   // 播放结束兜底：未开启片尾跳过或短视频时，靠 ended 自动连播
   video.addEventListener('ended', function () {
     if (PS.auto) playNext('本集播放完成，自动播放下一集');
   });
+  // 转屏 / 改变窗口大小后，原生播放器要跟着排版
+  window.addEventListener('resize', function () { npRelayout(); });
+  window.addEventListener('orientationchange', function () { setTimeout(npRelayout, 350); });
+  // 离开页面时收起原生播放器，别留个黑框挂在上面
+  window.addEventListener('pagehide', function () { npClose(); });
 })();
 
 // 切换到指定集（统一入口：更新选中态+播放+滚动）
@@ -239,6 +299,19 @@ document.querySelectorAll('.detail-tabs a').forEach(function (a) {
 
 function play(url) {
   curUrl = url;
+  _resetEpFlags();
+  var isCasting = document.getElementById('castMask').style.display !== 'none';
+  // iOS：交给原生播放器；投屏中则不起本地播放
+  if (HAS_NATIVE_PLAYER) {
+    if (isCasting) { npClose(); return; }
+    npOpen(url);
+    return;
+  }
+  fallbackPlay(url);
+}
+
+// 非 iOS 环境：原来的 <video> + hls.js 方案
+function fallbackPlay(url) {
   var video = document.getElementById('video');
   var isCasting = document.getElementById('castMask').style.display !== 'none';
   var lower = (url || '').toLowerCase();
@@ -462,6 +535,7 @@ document.getElementById('btnCast').onclick = function () {
   var video = document.getElementById('video');
   // 投屏后暂停手机本地播放，显示"正在投屏"遮罩
   try { video.pause(); } catch (e) {}
+  npPause();
   var mask = document.getElementById('castMask');
   document.getElementById('castMaskText').textContent = '正在搜索电视：' + (VOD ? VOD.vod_name : '');
   mask.style.display = 'flex';
@@ -492,8 +566,15 @@ document.getElementById('btnFull').onclick = function () {
 // 点击遮罩：退出投屏状态，恢复手机本地播放
 document.getElementById('castMask').onclick = function () {
   this.style.display = 'none';
+  if (NP.on) { npResume(); return; }
   var video = document.getElementById('video');
   video.play().catch(function () {});
+};
+
+// 返回键：收起原生播放器后回上一页
+document.getElementById('btnBack').onclick = function () {
+  npClose();
+  if (history.length > 1) { history.back(); } else { location.href = 'index.html'; }
 };
 document.getElementById('btnDownload').onclick = function () {
   if (!curUrl) { Coco.toast('请先选择一集'); return; }

@@ -42,6 +42,12 @@ enum Config {
         post: function (url, data, cb) { send({ m: 'post', url: String(url), data: String(data == null ? '' : data), cb: String(cb) }); },
         cast: function (url, title) { send({ m: 'cast', url: String(url || ''), title: String(title || '') }); },
         img: function (url, cb) { send({ m: 'img', url: String(url || ''), cb: String(cb) }); },
+        playerOpen: function (json) { send({ m: 'playerOpen', json: String(json || '') }); },
+        playerClose: function () { send({ m: 'playerClose' }); },
+        playerPlay: function () { send({ m: 'playerPlay' }); },
+        playerPause: function () { send({ m: 'playerPause' }); },
+        playerSeek: function (t) { send({ m: 'playerSeek', t: String(t) }); },
+        playerLayout: function (json) { send({ m: 'playerLayout', json: String(json || '') }); },
         share: function (title, url) { send({ m: 'share', title: String(title || ''), url: String(url || '') }); },
         copy: function (text) { send({ m: 'copy', text: String(text || '') }); },
         openWeb: function (url) { send({ m: 'openWeb', url: String(url || '') }); }
@@ -88,6 +94,10 @@ enum Config {
         }
         measureInsets();
         setTimeout(measureInsets, 300);
+        window.addEventListener('orientationchange', function () {
+          setTimeout(measureInsets, 320);
+        });
+        window.addEventListener('resize', measureInsets);
 
         // 输入框聚焦时 iOS 会把它顶到屏幕最上方，正好钻进灵动岛下面。
         // 键盘弹出后再校一次位置，保证光标始终在安全区内。
