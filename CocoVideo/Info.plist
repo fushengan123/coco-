@@ -41,7 +41,7 @@
 		<true/>
 		<key>NSExceptionDomains</key>
 		<dict>
-			<key>dutv.eu.org</key>
+			<key>191314.best</key>
 			<dict>
 				<key>NSExceptionAllowsInsecureHTTPLoads</key>
 				<true/>

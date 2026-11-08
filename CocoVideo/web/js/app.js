@@ -1,6 +1,6 @@
 /* ========== COCO APP 核心库 ========== */
 // 站点地址：APP内（file://）用绝对地址；网页版（http/https 同源）用相对地址
-var SITE = (location.protocol === 'http:' || location.protocol === 'https:') ? '' : 'https://dutv.eu.org';
+var SITE = (location.protocol === 'http:' || location.protocol === 'https:') ? '' : 'https://191314.best';
 var API = SITE + '/api.php/provide/vod/';
 
 var Coco = {
@@ -264,7 +264,7 @@ var Coco = {
   },
   /* ---------- 获取顶级分类（探测频道页子导航，服务器API无type_pid层级） ---------- */
   loadClasses: function (cb) {
-    var CACHE_KEY = 'coco_classes_v6';
+    var CACHE_KEY = 'coco_classes_v7';
     if (Coco.classes.length) { cb && cb(Coco.classes); return; }
     try {
       var c = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
@@ -310,37 +310,23 @@ var Coco = {
         cb && cb(tops);
         return;
       }
-      // 补充：内置表未覆盖的分类（后台未来新增）——探测其频道页，有子导航视为新顶级
+      // 补充：内置表未覆盖的分类一律作为独立顶级。
+      // 这一站的 HTML 频道页直接 500，探测子分类拿不到任何东西，
+      // 所以不做探测——宁可平铺也不能让分类整块消失。
       var topIds = {}, subIds = {};
       tops.forEach(function (t) {
         topIds[String(t.type_id)] = true;
         (t.subs || []).forEach(function (s) { subIds[String(s.type_id)] = true; });
       });
-      var extra = all.filter(function (c) {
+      all.forEach(function (c) {
         var id = String(c.type_id);
-        return !topIds[id] && !subIds[id];
+        if (topIds[id] || subIds[id]) return;
+        tops.push({ type_id: c.type_id, type_name: c.type_name, subs: [] });
+        topIds[id] = true;
       });
-      // 先渲染再探测：任何一个补充探测卡住，都不能拖住整页渲染
       Coco.classes = tops;
       try { localStorage.setItem(CACHE_KEY, JSON.stringify({ t: Date.now(), tops: tops })); } catch (e2) {}
       cb && cb(tops);
-      if (!extra.length) return;
-      // 后台探测：有新顶级就热更新，不阻塞首屏
-      var pending = extra.length, changed = false;
-      extra.forEach(function (c) {
-        Coco.loadSubs(c.type_id, function (subs) {
-          pending--;
-          if (subs && subs.length) {
-            var dup = tops.some(function (t) { return String(t.type_id) === String(c.type_id); });
-            if (!dup) { tops.push({ type_id: c.type_id, type_name: c.type_name, subs: subs }); changed = true; }
-          }
-          if (pending <= 0 && changed) {
-            Coco.classes = tops;
-            try { localStorage.setItem(CACHE_KEY, JSON.stringify({ t: Date.now(), tops: tops })); } catch (e3) {}
-            try { if (typeof Coco.onClassesLate === 'function') Coco.onClassesLate(tops); } catch (e4) {}
-          }
-        });
-      });
     });
   },
   /* ---------- 二级分类（解析频道页，API不返回层级） ---------- */

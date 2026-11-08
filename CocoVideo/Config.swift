@@ -10,7 +10,7 @@ enum Config {
     static let startPage = "index.html"
 
     /// 站点（与 H5 里 SITE 保持一致）
-    static let site = "https://dutv.eu.org"
+    static let site = "https://191314.best"
 
     static let brandName = "COCO影视"
 
