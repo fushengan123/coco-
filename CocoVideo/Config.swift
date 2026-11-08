@@ -114,31 +114,6 @@ enum Config {
         });
         window.addEventListener('resize', measureInsets);
 
-        // 品牌字跟着包走：Coco 包里所有"开心视频"换成 Coco
-        function applyBrand() {
-          var b = window.__COCO_BRAND;
-          if (!b || b === '开心视频') return;
-          try {
-            if (document.title) document.title = document.title.split('开心视频').join(b);
-            var metas = document.querySelectorAll('meta[content*="开心视频"]');
-            for (var i = 0; i < metas.length; i++) {
-              metas[i].setAttribute('content', metas[i].getAttribute('content').split('开心视频').join(b));
-            }
-            var root = document.body || document.documentElement;
-            if (!root) return;
-            var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null, false);
-            var n, hits = [];
-            while ((n = walker.nextNode())) {
-              if (n.nodeValue && n.nodeValue.indexOf('开心视频') >= 0) hits.push(n);
-            }
-            for (var j = 0; j < hits.length; j++) {
-              hits[j].nodeValue = hits[j].nodeValue.split('开心视频').join(b);
-            }
-          } catch (e) { }
-        }
-        applyBrand();
-        document.addEventListener('DOMContentLoaded', applyBrand);
-        window.addEventListener('load', function () { applyBrand(); setTimeout(applyBrand, 600); });
 
         // 输入框聚焦时 iOS 会把它顶到屏幕最上方，正好钻进灵动岛下面。
         // 键盘弹出后再校一次位置，保证光标始终在安全区内。

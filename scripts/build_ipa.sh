@@ -3,15 +3,15 @@
 # 用法:
 #   bash scripts/build_ipa.sh [版本] [站点] [显示名] [BundleID] [输出文件名]
 # 例:
-#   bash scripts/build_ipa.sh 1.7.0 https://dutv.eu.org  Coco    com.coco.video   coco_v1.7.0_ios.ipa
-#   bash scripts/build_ipa.sh 1.7.0 https://191314.best  开心视频 com.coco.video2  kaixin_v1.7.0_ios.ipa
+#   bash scripts/build_ipa.sh 1.7.0 https://dutv.eu.org  开心视频 com.coco.video   kaixin_v1.7.0_ios.ipa
+#   bash scripts/build_ipa.sh 1.7.0 https://191314.best  Coco    com.coco.video2  coco_v1.7.0_ios.ipa
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
 VERSION="${1:-1.7.0}"
 SITE="${2:-https://dutv.eu.org}"
-DISPLAY="${3:-Coco}"
+DISPLAY="${3:-开心视频}"
 BUNDLE="${4:-com.coco.video}"
 OUT_NAME="${5:-${DISPLAY}_v${VERSION}_ios.ipa}"
 

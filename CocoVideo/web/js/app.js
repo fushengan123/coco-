@@ -13,6 +13,28 @@ else if (SITE_LIST.indexOf(_site) < 0) _site = SITE_LIST[0];
 // 品牌名由原生注入（Coco / 开心视频），网页版默认开心视频
 var BRAND = (typeof window !== 'undefined' && window.__COCO_BRAND) ? String(window.__COCO_BRAND) : '开心视频';
 var SITE = (location.protocol === 'http:' || location.protocol === 'https:') ? '' : _site;
+
+/* 品牌字：模板里写的是"开心视频"，Coco 包整体换掉 */
+function applyBrand() {
+  if (!BRAND || BRAND === '开心视频') return;
+  try {
+    if (document.title) document.title = document.title.split('开心视频').join(BRAND);
+    var metas = document.querySelectorAll('meta[content*="开心视频"]');
+    for (var i = 0; i < metas.length; i++) {
+      metas[i].setAttribute('content', metas[i].getAttribute('content').split('开心视频').join(BRAND));
+    }
+    var root = document.body || document.documentElement;
+    if (!root || !root.querySelectorAll) return;
+    var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null, false);
+    var n, hits = [];
+    while ((n = walker.nextNode())) {
+      if (n.nodeValue && n.nodeValue.indexOf('开心视频') >= 0) hits.push(n);
+    }
+    for (var j = 0; j < hits.length; j++) {
+      hits[j].nodeValue = hits[j].nodeValue.split('开心视频').join(BRAND);
+    }
+  } catch (e) { }
+}
 var API = SITE + '/api.php/provide/vod/';
 
 var Coco = {
@@ -721,3 +743,13 @@ var Native = {
     else { Coco.toast('请在浏览器中分享'); }
   }
 };
+
+/* ---------- 品牌替换执行 ---------- */
+try {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', applyBrand);
+  } else {
+    applyBrand();
+  }
+  window.addEventListener('load', function () { applyBrand(); setTimeout(applyBrand, 600); });
+} catch (e) { }

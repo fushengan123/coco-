@@ -21,11 +21,11 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
 
-      - name: Build Coco (dutv)
-        run: bash scripts/build_ipa.sh 1.7.0 https://dutv.eu.org Coco com.coco.video coco_v1.7.0_ios.ipa 2>&1 | tee build_log.txt
+      - name: Build 开心视频 (dutv)
+        run: bash scripts/build_ipa.sh 1.7.0 https://dutv.eu.org 开心视频 com.coco.video kaixin_v1.7.0_ios.ipa 2>&1 | tee build_log.txt
 
-      - name: Build 开心视频 (191314)
-        run: bash scripts/build_ipa.sh 1.7.0 https://191314.best 开心视频 com.coco.video2 kaixin_v1.7.0_ios.ipa 2>&1 | tee -a build_log.txt
+      - name: Build Coco (191314)
+        run: bash scripts/build_ipa.sh 1.7.0 https://191314.best Coco com.coco.video2 coco_v1.7.0_ios.ipa 2>&1 | tee -a build_log.txt
 
       - name: Upload IPA
         if: always()
