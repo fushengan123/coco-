@@ -609,12 +609,31 @@ var Coco = {
     if (img.getAttribute('data-nbf') === '1') return;
     if (ds.indexOf('data:') === 0) return;      // 占位图，等真地址回填
     img.setAttribute('data-nbf', '1');
+
     if (!Coco._useNativeImg()) { img.src = ds; return; }
-    img.onerror = function () {
+
+    // 三层兜底：cocoapp 图片代理 → 桥接 base64 → 直连
+    var step = 0;
+    function next() {
+      step++;
+      if (step === 1) {
+        img.src = 'cocoapp://local/__img/?u=' + encodeURIComponent(ds);
+        return;
+      }
+      if (step === 2 && window.AndroidBridge && AndroidBridge.img) {
+        var cbId = 'im_' + (++Coco._seq);
+        Coco._nbcbs[cbId] = function (err, uri) {
+          if (!err && uri) { img.src = uri; return; }
+          next();
+        };
+        try { AndroidBridge.img(ds, cbId); } catch (e) { delete Coco._nbcbs[cbId]; next(); }
+        return;
+      }
       img.onerror = null;
-      img.src = ds;                             // 协议处理器也失败，退回直连
-    };
-    img.src = 'cocoimg://img/?u=' + encodeURIComponent(ds);
+      img.src = ds;
+    }
+    img.onerror = next;
+    next();
   },
   imgLazy: function (root) {
     var imgs = (root || document).querySelectorAll('img[data-src]');

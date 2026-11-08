@@ -27,6 +27,20 @@ final class LocalSchemeHandler: NSObject, WKURLSchemeHandler {
         if relative.isEmpty || relative == "/" { relative = "/" + Config.startPage }
         while relative.hasPrefix("/") { relative.removeFirst() }
 
+        // 图片代理入口：cocoapp://local/__img/?u=<编码后的图片地址>
+        // 走已经验证可用的 cocoapp scheme，避免自定义 scheme 在图片上的不确定性
+        if relative.hasPrefix("__img") {
+            guard let comps = URLComponents(url: url, resolvingAgainstBaseURL: false),
+                  let value = comps.queryItems?.first(where: { $0.name == "u" })?.value,
+                  let pic = URL(string: value),
+                  let ps = pic.scheme?.lowercased(), ps == "http" || ps == "https" else {
+                fail(urlSchemeTask, key, code: 400)
+                return
+            }
+            ImageResponder.serve(url: url, target: pic, task: urlSchemeTask)
+            return
+        }
+
         let target = root.appendingPathComponent(relative).standardizedFileURL
         guard target.path.hasPrefix(root.path) else {
             fail(urlSchemeTask, key, code: 403)
@@ -65,6 +79,8 @@ final class LocalSchemeHandler: NSObject, WKURLSchemeHandler {
     func webView(_ webView: WKWebView, stop urlSchemeTask: WKURLSchemeTask) {
         let key = ObjectIdentifier(urlSchemeTask as AnyObject).hashValue
         lock.lock(); cancelled.insert(key); lock.unlock()
+        // 图片代理走的是同一条 scheme，也要同步标记，否则会对着已停止的任务回调
+        ImageResponder.markStopped(urlSchemeTask)
     }
 
     private func isCancelled(_ key: Int) -> Bool {

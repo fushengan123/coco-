@@ -1,19 +1,29 @@
 import Foundation
 import UIKit
 import WebKit
+import ObjectiveC
 
 /// 图片代理：图片站普遍只部署叶证书、开了防盗链，WebKit 校验不过就直接裂图。
-/// 原生这边拿字节（放行证书链 + 正确 UA/Referer），顺手压到 480px 再交回去。
+/// 原生这边放行证书链取字节，顺手压到 480px，再按原格式（或 jpeg）交回去。
 ///
-/// 两种出口：
-///  - `loadData`  → 给 cocoimg:// 协议处理器用，直接把字节喂给 <img>（主路径）
-///  - `load`      → 老桥接接口，base64 data URI（保留兜底）
+/// 出口：
+///  - `loadData`  → 给 cocoapp://local/__img/ 用（主路径，走已验证的 scheme）
+///  - `load`      → 桥接兜底，base64 data URI
 final class ImageProxy {
 
     static let shared = ImageProxy()
 
-    private let dataCache = NSCache<NSURL, NSData>()
-    private let uriCache = NSCache<NSURL, NSString>()
+    /// 带 mime 的载荷
+    final class Payload: NSObject {
+        let data: Data
+        let mime: String
+        init(data: Data, mime: String) {
+            self.data = data
+            self.mime = mime
+        }
+    }
+
+    private let cache = NSCache<NSURL, Payload>()
 
     private lazy var session: URLSession = {
         let cfg = URLSessionConfiguration.ephemeral
@@ -25,67 +35,75 @@ final class ImageProxy {
     }()
 
     private init() {
-        dataCache.countLimit = 200
-        uriCache.countLimit = 150
+        cache.countLimit = 200
     }
 
-    // MARK: - 主路径：返回字节
+    // MARK: - 取字节（主路径）
 
-    func loadData(_ url: URL, completion: @escaping (Data?) -> Void) {
-        if let hit = dataCache.object(forKey: url as NSURL) {
-            completion(hit as Data)
+    func loadData(_ url: URL, completion: @escaping (Data?, String) -> Void) {
+        if let hit = cache.object(forKey: url as NSURL) {
+            completion(hit.data, hit.mime)
             return
         }
-        fetch(url) { [weak self] data in
+        fetch(url) { [weak self] data, mime in
             guard let self = self, let data = data else {
-                completion(nil)
+                completion(nil, "image/jpeg")
                 return
             }
-            let out = Self.downscale(data) ?? data
-            self.dataCache.setObject(out as NSData, forKey: url as NSURL)
-            completion(out)
+            // 能解码就压到 480px 转 jpeg；解不了（webp/异常）就原样交回，mime 用原始的
+            if let small = Self.downscale(data) {
+                self.cache.setObject(Payload(data: small, mime: "image/jpeg"), forKey: url as NSURL)
+                completion(small, "image/jpeg")
+            } else {
+                self.cache.setObject(Payload(data: data, mime: mime), forKey: url as NSURL)
+                completion(data, mime)
+            }
         }
     }
 
-    // MARK: - 兼容路径：返回 base64 data URI
+    // MARK: - 兼容路径：base64 data URI
 
     func load(_ url: URL, completion: @escaping (String?) -> Void) {
-        if let hit = uriCache.object(forKey: url as NSURL) {
-            completion(hit as String)
-            return
-        }
-        loadData(url) { [weak self] data in
-            guard let self = self, let data = data else {
+        loadData(url) { data, mime in
+            guard let data = data else {
                 completion(nil)
                 return
             }
-            let uri = "data:image/jpeg;base64," + data.base64EncodedString()
-            self.uriCache.setObject(uri as NSString, forKey: url as NSURL)
-            completion(uri)
+            completion("data:\(mime);base64," + data.base64EncodedString())
         }
     }
 
-    // MARK: - 取字节
+    // MARK: - 网络
 
-    private func fetch(_ url: URL, completion: @escaping (Data?) -> Void) {
+    private func fetch(_ url: URL, completion: @escaping (Data?, String) -> Void) {
         var request = URLRequest(url: url)
         request.setValue(Config.mobileUserAgent, forHTTPHeaderField: "User-Agent")
         request.setValue("\(url.scheme ?? "https")://\(url.host ?? "")/", forHTTPHeaderField: "Referer")
         request.setValue("image/webp,image/apng,image/*,*/*;q=0.8", forHTTPHeaderField: "Accept")
 
-        session.dataTask(with: request) { data, _, error in
+        session.dataTask(with: request) { data, response, error in
             guard error == nil,
                   let data = data,
                   !data.isEmpty,
                   data.count <= 8_000_000 else {
-                completion(nil)
+                completion(nil, "image/jpeg")
                 return
             }
-            completion(data)
+            completion(data, Self.mimeType(response: response, data: data))
         }.resume()
     }
 
-    /// 压到 480px 宽的 JPEG；解不了（webp/异常）就返回 nil，由调用方用原字节
+    static func mimeType(response: URLResponse?, data: Data) -> String {
+        if let type = response?.mimeType, type.hasPrefix("image/") { return type }
+        let bytes = [UInt8](data.prefix(12))
+        if bytes.count > 2, bytes[0] == 0xFF, bytes[1] == 0xD8 { return "image/jpeg" }
+        if bytes.count > 4, bytes[0] == 0x89, bytes[1] == 0x50 { return "image/png" }
+        if bytes.count > 4, bytes[0] == 0x47, bytes[1] == 0x49 { return "image/gif" }
+        if bytes.count > 12, bytes[0] == 0x52, bytes[1] == 0x49, bytes[8] == 0x57 { return "image/webp" }
+        return "image/jpeg"
+    }
+
+    /// 压到 480px 宽的 JPEG；解不了就返回 nil
     static func downscale(_ data: Data) -> Data? {
         guard let image = UIImage(data: data) else { return nil }
         let maxWidth: CGFloat = 480
@@ -101,22 +119,60 @@ final class ImageProxy {
     }
 }
 
-/// cocoimg://img/?u=<percent-encoded https url>
-/// 让 <img src> 直接走原生取图，避免把 base64 大字符串塞回 JS。
+/// 统一的图片响应：给某个 WKURLSchemeTask 回字节
+enum ImageResponder {
+
+    /// 结束标记直接挂在任务对象上（而不是按指针哈希存全局表）：
+    /// 对象释放后标记自然消失，不会出现哈希被复用、新任务被误判成已结束的情况
+    private static var closedKey: UInt8 = 0
+    private static let lock = NSLock()
+
+    static func take(_ task: WKURLSchemeTask) -> Bool {
+        let object = task as AnyObject
+        lock.lock(); defer { lock.unlock() }
+        if objc_getAssociatedObject(object, &closedKey) != nil { return false }
+        objc_setAssociatedObject(object, &closedKey, NSNumber(value: true), .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+        return true
+    }
+
+    static func markStopped(_ task: WKURLSchemeTask) {
+        _ = take(task)
+    }
+
+    static func serve(url: URL, target: URL, task: WKURLSchemeTask) {
+        ImageProxy.shared.loadData(target) { data, mime in
+            DispatchQueue.main.async {
+                guard take(task) else { return }
+                guard let data = data else {
+                    task.didFailWithError(NSError(domain: "cocoimg", code: 404))
+                    return
+                }
+                let headers: [String: String] = [
+                    "Content-Type": mime,
+                    "Content-Length": String(data.count),
+                    "Cache-Control": "max-age=86400",
+                    "Access-Control-Allow-Origin": "*"
+                ]
+                guard let response = HTTPURLResponse(url: url, statusCode: 200,
+                                                     httpVersion: "HTTP/1.1", headerFields: headers) else {
+                    task.didFailWithError(NSError(domain: "cocoimg", code: 500))
+                    return
+                }
+                task.didReceive(response)
+                task.didReceive(data)
+                task.didFinish()
+            }
+        }
+    }
+}
+
+/// cocoimg://img/?u=<percent-encoded https url>（备用入口）
 final class ImageSchemeHandler: NSObject, WKURLSchemeHandler {
 
     static let scheme = "cocoimg"
     static let host = "img"
 
-    static func makeURL(_ raw: String) -> String? {
-        let encoded = raw.addingPercentEncoding(withAllowedCharacters: .alphanumerics)
-            ?? raw.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)
-        guard let encoded = encoded else { return nil }
-        return "\(scheme)://\(host)/?u=\(encoded)"
-    }
-
-    static func target(from url: URL) -> URL? {
-        guard url.scheme?.lowercased() == scheme else { return nil }
+    private static func target(from url: URL) -> URL? {
         guard let comps = URLComponents(url: url, resolvingAgainstBaseURL: false),
               let value = comps.queryItems?.first(where: { $0.name == "u" })?.value,
               let target = URL(string: value),
@@ -124,60 +180,18 @@ final class ImageSchemeHandler: NSObject, WKURLSchemeHandler {
         return target
     }
 
-    // 已取消 / 已结束的任务必须记账：
-    // 对结束过的 WKURLSchemeTask 再调 didReceive，WebKit 会直接抛
-    // "This task has already been stopped" 的 ObjC 异常（闪退）。
-    private var closed = Set<Int>()
-    private let lock = NSLock()
-
-    private func key(of task: WKURLSchemeTask) -> Int {
-        ObjectIdentifier(task as AnyObject).hashValue
-    }
-
-    private func take(_ task: WKURLSchemeTask) -> Bool {
-        let k = key(of: task)
-        lock.lock(); defer { lock.unlock() }
-        if closed.contains(k) { return false }
-        closed.insert(k)
-        return true
-    }
-
     func webView(_ webView: WKWebView, start urlSchemeTask: WKURLSchemeTask) {
-        guard let url = urlSchemeTask.request.url,
-              let target = Self.target(from: url) else {
-            if take(urlSchemeTask) {
+        guard let url = urlSchemeTask.request.url, let target = Self.target(from: url) else {
+            if ImageResponder.take(urlSchemeTask) {
                 urlSchemeTask.didFailWithError(NSError(domain: "cocoimg", code: 400))
             }
             return
         }
-
-        ImageProxy.shared.loadData(target) { data in
-            DispatchQueue.main.async {
-                guard self.take(urlSchemeTask) else { return }
-                guard let data = data else {
-                    urlSchemeTask.didFailWithError(NSError(domain: "cocoimg", code: 404))
-                    return
-                }
-                let headers: [String: String] = [
-                    "Content-Type": "image/jpeg",
-                    "Content-Length": String(data.count),
-                    "Cache-Control": "max-age=86400",
-                    "Access-Control-Allow-Origin": "*"
-                ]
-                guard let response = HTTPURLResponse(url: url, statusCode: 200,
-                                                     httpVersion: "HTTP/1.1", headerFields: headers) else {
-                    urlSchemeTask.didFailWithError(NSError(domain: "cocoimg", code: 500))
-                    return
-                }
-                urlSchemeTask.didReceive(response)
-                urlSchemeTask.didReceive(data)
-                urlSchemeTask.didFinish()
-            }
-        }
+        ImageResponder.serve(url: url, target: target, task: urlSchemeTask)
     }
 
     func webView(_ webView: WKWebView, stop urlSchemeTask: WKURLSchemeTask) {
-        _ = take(urlSchemeTask)   // 标记已结束，后续回调一律跳过
+        ImageResponder.markStopped(urlSchemeTask)
     }
 }
 
