@@ -652,7 +652,7 @@ var Coco = {
             Coco._lazyObs.unobserve(en.target);
           }
         });
-      }, { rootMargin: '300px 0px' });
+      }, { rootMargin: '600px 0px' });
     }
     imgs.forEach(function (img) { Coco._lazyObs.observe(img); });
     // 轮询兜底：IO 不触发的环境（部分WebView/headless）也能加载视口内图片

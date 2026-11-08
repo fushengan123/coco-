@@ -25,13 +25,22 @@ final class ImageProxy {
 
     private let cache = NSCache<NSURL, Payload>()
 
+    /// URLSession 默认回调队列是串行的：20 张图会排队解码+转码，
+    /// 表现就是"先一片灰，再一张张冒出来"。这里换成并发队列。
+    private lazy var callbackQueue: OperationQueue = {
+        let q = OperationQueue()
+        q.maxConcurrentOperationCount = 8
+        q.qualityOfService = .userInitiated
+        return q
+    }()
+
     private lazy var session: URLSession = {
         let cfg = URLSessionConfiguration.ephemeral
         cfg.timeoutIntervalForRequest = 15
         cfg.timeoutIntervalForResource = 25
-        cfg.httpMaximumConnectionsPerHost = 6
+        cfg.httpMaximumConnectionsPerHost = 10
         cfg.urlCache = nil
-        return URLSession(configuration: cfg, delegate: PermissiveTLS(), delegateQueue: nil)
+        return URLSession(configuration: cfg, delegate: PermissiveTLS(), delegateQueue: callbackQueue)
     }()
 
     private init() {
@@ -48,6 +57,12 @@ final class ImageProxy {
         fetch(url) { [weak self] data, mime in
             guard let self = self, let data = data else {
                 completion(nil, "image/jpeg")
+                return
+            }
+            // 已经够小的就不折腾了，省一次解码+重绘
+            if data.count <= 45_000 {
+                self.cache.setObject(Payload(data: data, mime: mime), forKey: url as NSURL)
+                completion(data, mime)
                 return
             }
             // 能解码就压到 480px 转 jpeg；解不了（webp/异常）就原样交回，mime 用原始的
