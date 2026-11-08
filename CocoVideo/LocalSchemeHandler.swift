@@ -49,6 +49,8 @@ final class LocalSchemeHandler: NSObject, WKURLSchemeHandler {
                 let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: headers)
                 DispatchQueue.main.async {
                     guard let response = response else { return }
+                    // 派发到主线程的这段时间任务可能已被 stop，再回调会抛异常
+                    if self.isCancelled(key) { return }
                     urlSchemeTask.didReceive(response)
                     urlSchemeTask.didReceive(data)
                     urlSchemeTask.didFinish()
@@ -76,6 +78,7 @@ final class LocalSchemeHandler: NSObject, WKURLSchemeHandler {
 
     private func fail(_ task: WKURLSchemeTask, _ key: Int, code: Int) {
         DispatchQueue.main.async {
+            if self.isCancelled(key) { return }
             if let url = task.request.url {
                 let response = HTTPURLResponse(url: url, statusCode: code, httpVersion: "HTTP/1.1",
                                                headerFields: ["Content-Type": "text/plain; charset=utf-8"])

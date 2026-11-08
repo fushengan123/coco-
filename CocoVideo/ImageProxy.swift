@@ -124,21 +124,40 @@ final class ImageSchemeHandler: NSObject, WKURLSchemeHandler {
         return target
     }
 
+    // 已取消 / 已结束的任务必须记账：
+    // 对结束过的 WKURLSchemeTask 再调 didReceive，WebKit 会直接抛
+    // "This task has already been stopped" 的 ObjC 异常（闪退）。
+    private var closed = Set<Int>()
+    private let lock = NSLock()
+
+    private func key(of task: WKURLSchemeTask) -> Int {
+        ObjectIdentifier(task as AnyObject).hashValue
+    }
+
+    private func take(_ task: WKURLSchemeTask) -> Bool {
+        let k = key(of: task)
+        lock.lock(); defer { lock.unlock() }
+        if closed.contains(k) { return false }
+        closed.insert(k)
+        return true
+    }
+
     func webView(_ webView: WKWebView, start urlSchemeTask: WKURLSchemeTask) {
         guard let url = urlSchemeTask.request.url,
               let target = Self.target(from: url) else {
-            urlSchemeTask.didFailWithError(NSError(domain: "cocoimg", code: 400))
+            if take(urlSchemeTask) {
+                urlSchemeTask.didFailWithError(NSError(domain: "cocoimg", code: 400))
+            }
             return
         }
 
         ImageProxy.shared.loadData(target) { data in
-            guard let data = data else {
-                DispatchQueue.main.async {
-                    urlSchemeTask.didFailWithError(NSError(domain: "cocoimg", code: 404))
-                }
-                return
-            }
             DispatchQueue.main.async {
+                guard self.take(urlSchemeTask) else { return }
+                guard let data = data else {
+                    urlSchemeTask.didFailWithError(NSError(domain: "cocoimg", code: 404))
+                    return
+                }
                 let headers: [String: String] = [
                     "Content-Type": "image/jpeg",
                     "Content-Length": String(data.count),
@@ -158,7 +177,7 @@ final class ImageSchemeHandler: NSObject, WKURLSchemeHandler {
     }
 
     func webView(_ webView: WKWebView, stop urlSchemeTask: WKURLSchemeTask) {
-        // 单张图很小，不做取消处理
+        _ = take(urlSchemeTask)   // 标记已结束，后续回调一律跳过
     }
 }
 
